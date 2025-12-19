@@ -1,0 +1,15 @@
+{
+  "name": "PADEL - Web App",
+  "short_name": "PADEL",
+  "start_url": "./#/score",
+  "display": "standalone",
+  "background_color": "#0f1115",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAIElEQVR4nO3BMQEAAADCoPVPbQ0PoAAAAAAAAAAA4G4H4AABXGf5YQAAAABJRU5ErkJggg==",
+      "sizes": "64x64",
+      "type": "image/png"
+    }
+  ]
+}

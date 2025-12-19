@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>PADEL • Web App</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand" role="button" tabindex="0" onclick="location.hash='#/score'">
+      <span class="logo">🎾</span>
+      <span class="title">PADEL</span>
+    </div>
+
+    <nav class="nav">
+      <a href="#/score" data-route>Score</a>
+      <a href="#/players" data-route>Joueurs</a>
+      <a href="#/ranking" data-route>Classement</a>
+      <a href="#/history" data-route>Historique</a>
+    </nav>
+  </header>
+
+  <main class="container">
+    <!-- SCORE -->
+    <section id="view-score" class="view">
+      <h1>Compteur de match (2 vs 2)</h1>
+
+      <div class="card">
+        <h2>Choix des joueurs</h2>
+
+        <div class="grid-2">
+          <div>
+            <h3>Équipe A</h3>
+            <div class="row">
+              <label>Joueur A1</label>
+              <select id="a1"></select>
+            </div>
+            <div class="row">
+              <label>Joueur A2</label>
+              <select id="a2"></select>
+            </div>
+          </div>
+
+          <div>
+            <h3>Équipe B</h3>
+            <div class="row">
+              <label>Joueur B1</label>
+              <select id="b1"></select>
+            </div>
+            <div class="row">
+              <label>Joueur B2</label>
+              <select id="b2"></select>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="row">
+            <label>Sets gagnants</label>
+            <select id="bestOf">
+              <option value="3">2 sets gagnants (Best of 3)</option>
+              <option value="5">3 sets gagnants (Best of 5)</option>
+            </select>
+          </div>
+          <div class="row">
+            <label>Jeu décisif (tie-break à 6-6)</label>
+            <select id="tiebreak">
+              <option value="on">Oui</option>
+              <option value="off">Non</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn" id="btnStart">Démarrer / Réinitialiser le match</button>
+        </div>
+
+        <p class="muted" id="needPlayersMsg"></p>
+      </div>
+
+      <div class="card">
+        <h2>Score</h2>
+
+        <div class="scoreboard">
+          <div class="team">
+            <div class="team-head">
+              <div class="team-name" id="teamAName">Équipe A</div>
+              <div class="pill" id="serveA">SERVICE</div>
+            </div>
+
+            <div class="scoreline">
+              <div class="big"><span id="setsA">0</span><small>sets</small></div>
+              <div class="big"><span id="gamesA">0</span><small>jeux</small></div>
+            </div>
+
+            <div class="points">
+              <div class="point bigPoint"><span id="pointsA">0</span><small>tie-break</small></div>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary" id="btnPointA">+1 point (A)</button>
+              <button class="btn ghost" id="btnGameA">+1 jeu (A)</button>
+            </div>
+          </div>
+
+          <div class="team">
+            <div class="team-head">
+              <div class="team-name" id="teamBName">Équipe B</div>
+              <div class="pill" id="serveB">SERVICE</div>
+            </div>
+
+            <div class="scoreline">
+              <div class="big"><span id="setsB">0</span><small>sets</small></div>
+              <div class="big"><span id="gamesB">0</span><small>jeux</small></div>
+            </div>
+
+            <div class="points">
+              <div class="point bigPoint"><span id="pointsB">0</span><small>tie-break</small></div>
+            </div>
+
+            <div class="actions">
+              <button class="btn primary" id="btnPointB">+1 point (B)</button>
+              <button class="btn ghost" id="btnGameB">+1 jeu (B)</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="grid-2">
+          <div class="row">
+            <label>Mode</label>
+            <select id="mode">
+              <option value="gamesets">Jeux + sets (recommandé)</option>
+              <option value="tiebreak">Tie-break uniquement</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label>Service</label>
+            <select id="serveWho">
+              <option value="A">Équipe A</option>
+              <option value="B">Équipe B</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn danger" id="btnUndo">Annuler dernier point/jeu</button>
+          <button class="btn" id="btnFinish">Terminer & enregistrer le match</button>
+        </div>
+
+        <p class="muted" id="matchStatus"></p>
+      </div>
+    </section>
+
+    <!-- PLAYERS -->
+    <section id="view-players" class="view">
+      <h1>Joueurs</h1>
+
+      <div class="card">
+        <h2>Ajouter un joueur</h2>
+        <div class="grid-2">
+          <div class="row">
+            <label>Nom</label>
+            <input id="playerName" type="text" placeholder="Ex: Alex Martin" />
+          </div>
+          <div class="row">
+            <label>Niveau</label>
+            <select id="playerLevel">
+              <option value="1">1 (débutant)</option>
+              <option value="2">2</option>
+              <option value="3" selected>3</option>
+              <option value="4">4</option>
+              <option value="5">5 (expert)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button class="btn primary" id="btnAddPlayer">Ajouter</button>
+          <button class="btn ghost" id="btnSeed">Créer des joueurs exemples</button>
+        </div>
+        <p class="muted">Astuce : le classement utilise aussi un ELO (mis à jour à chaque match).</p>
+      </div>
+
+      <div class="card">
+        <h2>Liste</h2>
+        <div class="tableWrap">
+          <table class="table" id="playersTable">
+            <thead>
+              <tr>
+                <th>Nom</th>
+                <th>Niveau</th>
+                <th>ELO</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- RANKING -->
+    <section id="view-ranking" class="view">
+      <h1>Classement joueurs</h1>
+
+      <div class="card">
+        <div class="grid-2">
+          <div class="row">
+            <label>Trier par</label>
+            <select id="rankingSort">
+              <option value="elo" selected>ELO</option>
+              <option value="wins">Victoires</option>
+              <option value="winrate">Winrate</option>
+              <option value="matches">Matchs joués</option>
+              <option value="level">Niveau</option>
+            </select>
+          </div>
+          <div class="row">
+            <label>Recherche</label>
+            <input id="rankingSearch" placeholder="Nom..." />
+          </div>
+        </div>
+
+        <div class="tableWrap">
+          <table class="table" id="rankingTable">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Joueur</th>
+                <th>Niveau</th>
+                <th>ELO</th>
+                <th>MJ</th>
+                <th>V</th>
+                <th>D</th>
+                <th>Win%</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section id="view-history" class="view">
+      <h1>Historique des matchs</h1>
+
+      <div class="card">
+        <div class="actions">
+          <button class="btn danger" id="btnClearMatches">Tout supprimer</button>
+        </div>
+
+        <div class="tableWrap">
+          <table class="table" id="matchesTable">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Équipe A</th>
+                <th>Équipe B</th>
+                <th>Score</th>
+                <th>Vainqueur</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <p class="muted">Chaque match est 2 vs 2, mais le classement est individuel (joueur).</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span class="muted">PADEL • GitHub Pages • Données stockées dans le navigateur (localStorage)</span>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
