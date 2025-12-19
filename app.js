@@ -565,7 +565,6 @@ function matchScoreLabel(m) {
 }
 
 
-
 function renderMatches() {
   const tb = $("matchesTable").querySelector("tbody");
   const matches = loadMatches();
@@ -740,5 +739,4 @@ function setScoreButtonsEnabled(enabled){
     if (el) el.style.cursor = enabled ? "pointer" : "not-allowed";
   });
 }
-
 
