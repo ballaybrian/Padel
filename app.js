@@ -394,10 +394,17 @@ function fillPlayerSelects() {
 
 function updateNeedPlayersMsg() {
   const players = loadPlayers();
-  const msg = players.length < 4
-    ? `Il te faut au moins 4 joueurs enregistrés. Actuellement : ${players.length}.`
-    : "";
+  const v = validateTeams();
+  const need = players.length < 4;
+  let msg = "";
+
+  if (need) msg = `Il te faut au moins 4 joueurs enregistrés. Actuellement : ${players.length}.`;
+  else if (!v.ok) msg = v.msg;
+
   $("needPlayersMsg").textContent = msg;
+
+  // activer les boutons seulement si 4 joueurs sélectionnés
+  setScoreButtonsEnabled(!need && v.ok);
 }
 
 function renderMatch() {
@@ -539,10 +546,16 @@ function renderRanking() {
 }
 
 function matchScoreLabel(m) {
-  if (m.mode === "tiebreak") return `TB ${m.pointsA ?? "?"}-${m.pointsB ?? "?"}`;
-  // if games are reset after set, show sets only
-  return `${m.setsA}-${m.setsB} (BO${m.bestOf})`;
+  if (m.mode === "tiebreak") return `Tie-break ${m.pointsA ?? "?"}-${m.pointsB ?? "?"}`;
+  // sets
+  let s = `${m.setsA}-${m.setsB}`;
+  // si des jeux restaient au moment de l’enregistrement (ex: tu termines juste après set, ça sera souvent 0-0)
+  if ((m.gamesA ?? 0) || (m.gamesB ?? 0)) s += ` | jeux ${m.gamesA}-${m.gamesB}`;
+  // si tie-break de set en cours enregistré (rare, mais possible)
+  if ((m.pointsA ?? 0) || (m.pointsB ?? 0)) s += ` | TB ${m.pointsA}-${m.pointsB}`;
+  return s;
 }
+
 
 function renderMatches() {
   const tb = $("matchesTable").querySelector("tbody");
@@ -710,3 +723,12 @@ function init() {
 }
 
 init();
+function setScoreButtonsEnabled(enabled){
+  ["btnPointA","btnPointB","btnGameA","btnGameB","btnUndo","btnFinish"].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.disabled = !enabled;
+    if (el) el.style.opacity = enabled ? "1" : ".5";
+    if (el) el.style.cursor = enabled ? "pointer" : "not-allowed";
+  });
+}
+
