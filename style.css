@@ -4,9 +4,8 @@
   --muted:#9aa4b2;
   --text:#e7ecf3;
   --border:#242b3a;
-  --primary:#7c3aed; /* violet */
+  --primary:#7c3aed;
   --danger:#ef4444;
-  --good:#22c55e;
 }
 
 *{box-sizing:border-box}
@@ -107,6 +106,7 @@ input:focus, select:focus{
   border-color: rgba(239,68,68,.6);
   background: rgba(239,68,68,.12);
 }
+.btn:disabled{opacity:.55; cursor:not-allowed}
 
 .muted{color:var(--muted); font-size:13px}
 

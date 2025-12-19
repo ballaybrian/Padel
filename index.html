@@ -96,12 +96,13 @@
             </div>
 
             <div class="points">
-              <div class="point bigPoint"><span id="pointsA">0</span><small>tie-break</small></div>
+              <div class="point bigPoint">
+                <span id="pointsA">0</span><small id="pointsLabelA">points</small>
+              </div>
             </div>
 
             <div class="actions">
               <button class="btn primary" id="btnPointA">+1 point (A)</button>
-              <button class="btn ghost" id="btnGameA">+1 jeu (A)</button>
             </div>
           </div>
 
@@ -117,12 +118,13 @@
             </div>
 
             <div class="points">
-              <div class="point bigPoint"><span id="pointsB">0</span><small>tie-break</small></div>
+              <div class="point bigPoint">
+                <span id="pointsB">0</span><small id="pointsLabelB">points</small>
+              </div>
             </div>
 
             <div class="actions">
               <button class="btn primary" id="btnPointB">+1 point (B)</button>
-              <button class="btn ghost" id="btnGameB">+1 jeu (B)</button>
             </div>
           </div>
         </div>
@@ -133,7 +135,7 @@
           <div class="row">
             <label>Mode</label>
             <select id="mode">
-              <option value="gamesets">Jeux + sets (recommandé)</option>
+              <option value="gamesets" selected>Jeux + sets (NO-AD)</option>
               <option value="tiebreak">Tie-break uniquement</option>
             </select>
           </div>
@@ -148,7 +150,7 @@
         </div>
 
         <div class="actions">
-          <button class="btn danger" id="btnUndo">Annuler dernier point/jeu</button>
+          <button class="btn danger" id="btnUndo">Annuler dernier point</button>
           <button class="btn" id="btnFinish">Terminer & enregistrer le match</button>
         </div>
 
@@ -183,7 +185,7 @@
           <button class="btn primary" id="btnAddPlayer">Ajouter</button>
           <button class="btn ghost" id="btnSeed">Créer des joueurs exemples</button>
         </div>
-        <p class="muted">Astuce : le classement utilise aussi un ELO (mis à jour à chaque match).</p>
+        <p class="muted">Classement : ELO + stats (MJ/V/D).</p>
       </div>
 
       <div class="card">
@@ -271,13 +273,13 @@
           </table>
         </div>
 
-        <p class="muted">Chaque match est 2 vs 2, mais le classement est individuel (joueur).</p>
+        <p class="muted">Matchs 2v2, classement individuel.</p>
       </div>
     </section>
   </main>
 
   <footer class="footer">
-    <span class="muted">PADEL • GitHub Pages • Données stockées dans le navigateur (localStorage)</span>
+    <span class="muted">PADEL • GitHub Pages • Données en local (localStorage)</span>
   </footer>
 
   <script src="app.js"></script>

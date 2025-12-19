@@ -1,22 +1,15 @@
 /* =========================================================
-   PADEL WEB APP (localStorage)
-   - Players: { id, name, level, elo }
-   - Matches: { id, dateISO, teamA:[id,id], teamB:[id,id], setsA, setsB, gamesA, gamesB, mode, winner:"A"|"B" }
-   - Ranking derived from matches (wins/losses/matches/winrate) + ELO updated on save
+   PADEL WEB APP (localStorage) — Mode simple
+   - Match 2v2
+   - Scoring: 0/15/30/40 en NO-AD (pas d'AV)
+     => à 40-40, le point suivant gagne le jeu
+   - Jeux + Sets automatiques
+   - Tie-break à 6-6 optionnel (points numériques 0..)
+   - Classement: stats + ELO (mis à jour à chaque match)
 ========================================================= */
-function setScoreButtonsEnabled(enabled){
-  ["btnPointA","btnPointB","btnGameA","btnGameB","btnUndo","btnFinish"].forEach(id=>{
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.disabled = !enabled;
-    el.style.opacity = enabled ? "1" : ".5";
-    el.style.cursor = enabled ? "pointer" : "not-allowed";
-  });
-}
 
-
-const LS_PLAYERS = "padel_players_v1";
-const LS_MATCHES = "padel_matches_v1";
+const LS_PLAYERS = "padel_players_v2";
+const LS_MATCHES = "padel_matches_v2";
 
 const $ = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
@@ -65,17 +58,14 @@ function setActiveRoute() {
     a.classList.toggle("active", href === hash);
   });
 
-  // refresh view data
   refreshAll();
 }
-
 window.addEventListener("hashchange", setActiveRoute);
 
 /* -------------------------
    State: current match
 ------------------------- */
 let match = null;
-// history stack for undo (stores snapshots)
 let undoStack = [];
 
 function resetMatch() {
@@ -88,10 +78,15 @@ function resetMatch() {
     tiebreak: $("tiebreak").value,     // on/off
     mode: $("mode").value,             // gamesets / tiebreak
     serve: $("serveWho").value,        // A/B
-    // scoring
+
     setsA: 0, setsB: 0,
     gamesA: 0, gamesB: 0,
-    pointsA: 0, pointsB: 0, // used for tie-break only mode or tie-break set
+
+    // points:
+    // - gamesets: 0..3 maps to 0/15/30/40 (NO-AD)
+    // - tiebreak: numeric
+    pointsA: 0, pointsB: 0,
+
     finished: false
   };
   undoStack = [];
@@ -101,22 +96,18 @@ function resetMatch() {
 
 function snapshot() {
   undoStack.push(JSON.stringify(match));
-  undoStack = undoStack.slice(-60);
+  undoStack = undoStack.slice(-80);
 }
-
 function undo() {
   if (!undoStack.length) return;
   match = JSON.parse(undoStack.pop());
   renderMatch();
+  updateNeedPlayersMsg();
 }
 
 /* -------------------------
    UI helpers
 ------------------------- */
-function playerLabel(p){
-  if (!p) return "";
-  return `${p.name} (N${p.level})`;
-}
 function getPlayerById(id){
   return loadPlayers().find(p => p.id === id) || null;
 }
@@ -133,16 +124,31 @@ function setServePill() {
   B.style.display = (match.serve === "B") ? "inline-block" : "none";
 }
 
-/* -------------------------
-   Scoring (padel simplified)
-   - Mode "gamesets": buttons +1 point increments a "game point counter" as tie-break style
-     (We keep it simple: +1 point -> if reaches 4 with 2 points gap, wins game)
-   - Mode "tiebreak": points only to 7 with 2 points gap (classic TB), no games/sets
-   - Also provide +1 jeu buttons (manual override)
-------------------------- */
+function setScoreButtonsEnabled(enabled){
+  ["btnPointA","btnPointB","btnUndo","btnFinish"].forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = !enabled;
+  });
+}
 
+/* -------------------------
+   Validation teams
+------------------------- */
+function validateTeams() {
+  const a1 = $("a1").value, a2 = $("a2").value, b1 = $("b1").value, b2 = $("b2").value;
+  const ids = [a1,a2,b1,b2].filter(Boolean);
+
+  if (ids.length < 4) return { ok:false, msg:"Choisis 4 joueurs (2 par équipe)." };
+  const uniq = new Set(ids);
+  if (uniq.size !== 4) return { ok:false, msg:"Chaque joueur doit être unique (pas de doublon)." };
+  return { ok:true, msg:"" };
+}
+
+/* -------------------------
+   Scoring helpers
+------------------------- */
 function currentSetsToWin() {
-  // bestOf=3 -> first to 2 ; bestOf=5 -> first to 3
   return Math.ceil(match.bestOf / 2);
 }
 
@@ -154,38 +160,33 @@ function isTiebreakSet() {
 
 function winGame(team) {
   if (match.mode !== "gamesets") return;
-  if (isTiebreakSet()) return; // in TB set, games don't increment; points decide set
 
   if (team === "A") match.gamesA++;
   else match.gamesB++;
 
-  // switch serve each game (simple rule for app)
+  // alternance service par jeu (simple)
   match.serve = (match.serve === "A") ? "B" : "A";
 
-  // check set win: 6 games with 2 games diff OR 7-5, or 7-6 if tiebreak on
+  // set gagné: 6 jeux avec 2 d'écart, ou 7 (7-5 / 7-6)
   const a = match.gamesA, b = match.gamesB;
   const diff = Math.abs(a - b);
 
   const hasSet =
-    (a >= 6 || b >= 6) &&
-    (diff >= 2 && (a <= 7 && b <= 7)) ||
+    ((a >= 6 || b >= 6) && diff >= 2 && a <= 7 && b <= 7) ||
     (a === 7 || b === 7);
 
   if (hasSet) {
     if (a > b) match.setsA++;
     else match.setsB++;
 
-    // reset games for next set
     match.gamesA = 0;
     match.gamesB = 0;
-    // reset tie-break points
     match.pointsA = 0;
     match.pointsB = 0;
   }
 }
 
 function winSetByTiebreak(team) {
-  // at 6-6, tie-break winner takes set 7-6
   if (team === "A") match.setsA++;
   else match.setsB++;
   match.gamesA = 0;
@@ -196,34 +197,59 @@ function winSetByTiebreak(team) {
 
 function checkMatchFinished() {
   const toWin = currentSetsToWin();
-  if (match.setsA >= toWin || match.setsB >= toWin) {
-    match.finished = true;
-  }
+  if (match.setsA >= toWin || match.setsB >= toWin) match.finished = true;
 }
 
-function addPointGamesets(team) {
-  // "points" here = internal game points (0..n) for a single game, simplified as TB-like:
-  // win game if >=4 and 2-point lead
-  if (team === "A") match.pointsA++;
-  else match.pointsB++;
+/* 0/15/30/40 (NO-AD, pas d'AV) */
+function pointText(p) {
+  if (p <= 0) return "0";
+  if (p === 1) return "15";
+  if (p === 2) return "30";
+  return "40";
+}
 
-  // during tie-break set: points decide set (first to 7, lead 2)
+/* -------------------------
+   Add point
+------------------------- */
+function addPointGamesets(team) {
+  // Tie-break de set à 6-6
   if (isTiebreakSet()) {
+    if (team === "A") match.pointsA++;
+    else match.pointsB++;
+
     const a = match.pointsA, b = match.pointsB;
     const lead = Math.abs(a - b);
+
     if ((a >= 7 || b >= 7) && lead >= 2) {
       winSetByTiebreak(a > b ? "A" : "B");
     }
     return;
   }
 
-  const a = match.pointsA, b = match.pointsB;
-  const lead = Math.abs(a - b);
-  if ((a >= 4 || b >= 4) && lead >= 2) {
-    // game won
-    winGame(a > b ? "A" : "B");
-    match.pointsA = 0;
-    match.pointsB = 0;
+  // Points classiques NO-AD
+  if (team === "A") match.pointsA++;
+  else match.pointsB++;
+
+  const a = match.pointsA;
+  const b = match.pointsB;
+
+  // Cas avant 40-40 : dès qu'un côté atteint 4 points, il gagne le jeu
+  // (0/15/30/40 => 0..3, puis 4 = "point gagnant")
+  if (a >= 4 && b <= 3) {
+    winGame("A");
+    match.pointsA = 0; match.pointsB = 0;
+    return;
+  }
+  if (b >= 4 && a <= 3) {
+    winGame("B");
+    match.pointsA = 0; match.pointsB = 0;
+    return;
+  }
+
+  // 40-40 (3-3) -> point décisif : le point suivant gagne le jeu
+  if (a === 4 && b === 4) {
+    winGame(team);
+    match.pointsA = 0; match.pointsB = 0;
   }
 }
 
@@ -234,9 +260,8 @@ function addPointTiebreak(team) {
   const a = match.pointsA, b = match.pointsB;
   const lead = Math.abs(a - b);
 
-  // TB only mode: first to 7 with 2 lead
+  // TB only: 1 manche -> setsA/setsB = 1/0
   if ((a >= 7 || b >= 7) && lead >= 2) {
-    // mark finished, store result as "sets" like 1-0 for compatibility
     match.setsA = a > b ? 1 : 0;
     match.setsB = b > a ? 1 : 0;
     match.finished = true;
@@ -244,8 +269,16 @@ function addPointTiebreak(team) {
 }
 
 function addPoint(team) {
-  if (!match) return;
-  if (match.finished) return;
+  if (!match || match.finished) return;
+
+  const v = validateTeams();
+  const players = loadPlayers();
+  if (players.length < 4 || !v.ok) {
+    $("matchStatus").textContent = v.ok ? "Ajoute au moins 4 joueurs dans la liste." : v.msg;
+    updateNeedPlayersMsg();
+    return;
+  }
+
   snapshot();
 
   match.mode = $("mode").value;
@@ -260,32 +293,13 @@ function addPoint(team) {
   renderMatch();
 }
 
-function addGame(team) {
-  if (!match) return;
-  if (match.finished) return;
-  snapshot();
-
-  match.mode = $("mode").value;
-  if (match.mode !== "gamesets") return; // manual game only meaningful there
-
-  // if in tie-break set, +1 game isn't used; you can still do it but it breaks rules -> block
-  if (isTiebreakSet()) return;
-
-  winGame(team);
-  checkMatchFinished();
-  renderMatch();
-}
-
 /* -------------------------
    ELO update (individual)
-   - Each match: compare average team elo
-   - Winner team gets +K*(1-expected), loser -K*(expected)
-   - Apply same delta to both players in team
 ------------------------- */
 function expectedScore(rA, rB){
   return 1 / (1 + Math.pow(10, (rB - rA)/400));
 }
-function updateEloAfterMatch(winnerTeam /*"A"|"B"*/, teamAIds, teamBIds) {
+function updateEloAfterMatch(winnerTeam, teamAIds, teamBIds) {
   const players = loadPlayers();
   const teamA = teamAIds.map(id => players.find(p => p.id === id)).filter(Boolean);
   const teamB = teamBIds.map(id => players.find(p => p.id === id)).filter(Boolean);
@@ -297,18 +311,16 @@ function updateEloAfterMatch(winnerTeam /*"A"|"B"*/, teamAIds, teamBIds) {
   const expA = expectedScore(avgA, avgB);
   const expB = expectedScore(avgB, avgA);
 
-  const K = 24; // simple stable K
+  const K = 24;
   const scoreA = (winnerTeam === "A") ? 1 : 0;
   const scoreB = (winnerTeam === "B") ? 1 : 0;
 
   const deltaA = K * (scoreA - expA);
   const deltaB = K * (scoreB - expB);
 
-  // apply same delta to both members
   teamA.forEach(p => p.elo = Math.round(p.elo + deltaA));
   teamB.forEach(p => p.elo = Math.round(p.elo + deltaB));
 
-  // clamp
   players.forEach(p => p.elo = clamp(p.elo, 200, 3000));
   savePlayers(players);
 }
@@ -316,32 +328,21 @@ function updateEloAfterMatch(winnerTeam /*"A"|"B"*/, teamAIds, teamBIds) {
 /* -------------------------
    Save match
 ------------------------- */
-function validateTeams() {
-  const a1 = $("a1").value, a2 = $("a2").value, b1 = $("b1").value, b2 = $("b2").value;
-  const ids = [a1,a2,b1,b2].filter(Boolean);
-
-  if (ids.length < 4) return { ok:false, msg:"Ajoute 4 joueurs (2 par équipe)." };
-  const uniq = new Set(ids);
-  if (uniq.size !== 4) return { ok:false, msg:"Chaque joueur doit être unique (pas de doublon)." };
-  return { ok:true, msg:"" };
-}
-
 function finishMatch() {
   if (!match) return;
+
   const v = validateTeams();
   if (!v.ok) { $("matchStatus").textContent = v.msg; return; }
 
-  // determine winner
   let winner = null;
 
   if (match.mode === "tiebreak") {
     if (!match.finished) { $("matchStatus").textContent = "Le tie-break n'est pas terminé."; return; }
     winner = match.setsA > match.setsB ? "A" : "B";
   } else {
-    // require either finished by sets OR user can still save if wants
     checkMatchFinished();
     if (!match.finished) {
-      $("matchStatus").textContent = "Match pas terminé (sets). Tu peux continuer ou terminer via un score de sets gagnant.";
+      $("matchStatus").textContent = "Match pas terminé (sets). Continue à marquer des points.";
       return;
     }
     winner = match.setsA > match.setsB ? "A" : "B";
@@ -377,7 +378,7 @@ function finishMatch() {
 
   $("matchStatus").textContent = "✅ Match enregistré !";
   refreshAll();
-  // prepare next match
+
   setTimeout(() => {
     resetMatch();
     $("matchStatus").textContent = "";
@@ -388,16 +389,14 @@ function finishMatch() {
    Rendering
 ------------------------- */
 function fillPlayerSelects() {
-  const players = loadPlayers()
-    .slice()
-    .sort((a,b) => a.name.localeCompare(b.name, "fr"));
-
+  const players = loadPlayers().slice().sort((a,b) => a.name.localeCompare(b.name, "fr"));
   const selects = ["a1","a2","b1","b2"].map($);
+
   selects.forEach(sel => {
     const cur = sel.value;
-    sel.innerHTML = `<option value="">— choisir —</option>` + players.map(p =>
-      `<option value="${p.id}">${playerLabel(p)}</option>`
-    ).join("");
+    sel.innerHTML =
+      `<option value="">— choisir —</option>` +
+      players.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (N${p.level})</option>`).join("");
     if (players.some(p => p.id === cur)) sel.value = cur;
   });
 }
@@ -406,38 +405,39 @@ function updateNeedPlayersMsg() {
   const players = loadPlayers();
   const v = validateTeams();
   const need = players.length < 4;
-  let msg = "";
 
+  let msg = "";
   if (need) msg = `Il te faut au moins 4 joueurs enregistrés. Actuellement : ${players.length}.`;
   else if (!v.ok) msg = v.msg;
 
   $("needPlayersMsg").textContent = msg;
-
-  // activer les boutons seulement si 4 joueurs sélectionnés
   setScoreButtonsEnabled(!need && v.ok);
 }
 
 function renderMatch() {
   if (!match) return;
 
-  // team names
   const aIds = [$("a1").value, $("a2").value];
   const bIds = [$("b1").value, $("b2").value];
+
   $("teamAName").textContent = (aIds[0] && aIds[1]) ? teamName(aIds) : "Équipe A";
   $("teamBName").textContent = (bIds[0] && bIds[1]) ? teamName(bIds) : "Équipe B";
 
-  // scoreboard
   $("setsA").textContent = match.setsA;
   $("setsB").textContent = match.setsB;
   $("gamesA").textContent = match.gamesA;
   $("gamesB").textContent = match.gamesB;
-  $("pointsA").textContent = match.pointsA;
-  $("pointsB").textContent = match.pointsB;
 
-  // serve pill
+  const inTB = (match.mode === "tiebreak") || isTiebreakSet();
+
+  $("pointsA").textContent = inTB ? match.pointsA : pointText(match.pointsA);
+  $("pointsB").textContent = inTB ? match.pointsB : pointText(match.pointsB);
+
+  $("pointsLabelA").textContent = inTB ? "tie-break" : "points";
+  $("pointsLabelB").textContent = inTB ? "tie-break" : "points";
+
   setServePill();
 
-  // status
   if (match.finished) {
     const winner = match.setsA > match.setsB ? "A" : "B";
     $("matchStatus").textContent = `🏁 Match terminé (vainqueur : Équipe ${winner}). Clique sur “Terminer & enregistrer”.`;
@@ -447,6 +447,7 @@ function renderMatch() {
 function renderPlayersTable() {
   const tb = $("playersTable").querySelector("tbody");
   const players = loadPlayers().slice().sort((a,b) => a.name.localeCompare(b.name, "fr"));
+
   tb.innerHTML = players.map(p => `
     <tr>
       <td>${escapeHtml(p.name)}</td>
@@ -462,9 +463,8 @@ function renderPlayersTable() {
   tb.querySelectorAll("[data-del]").forEach(btn => {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-del");
-      if (!confirm("Supprimer ce joueur ? (les matchs restent, mais son nom ne s'affichera plus)")) return;
-      const next = loadPlayers().filter(p => p.id !== id);
-      savePlayers(next);
+      if (!confirm("Supprimer ce joueur ?")) return;
+      savePlayers(loadPlayers().filter(p => p.id !== id));
       refreshAll();
     });
   });
@@ -474,10 +474,12 @@ function renderPlayersTable() {
       const id = btn.getAttribute("data-edit");
       const p = loadPlayers().find(x => x.id === id);
       if (!p) return;
+
       const name = prompt("Nom du joueur :", p.name);
       if (!name) return;
       const level = prompt("Niveau (1-5) :", String(p.level));
       const lvl = clamp(Number(level || p.level), 1, 5);
+
       const players = loadPlayers();
       const idx = players.findIndex(x => x.id === id);
       players[idx] = { ...players[idx], name: name.trim(), level: lvl };
@@ -501,14 +503,7 @@ function computeStats() {
     const b = m.teamB || [];
     const winner = m.winner;
 
-    const all = [...a, ...b];
-    all.forEach(pid => {
-      if (!stats[pid]) {
-        // player deleted -> still show in history but not ranking
-        return;
-      }
-      stats[pid].matches++;
-    });
+    [...a, ...b].forEach(pid => { if (stats[pid]) stats[pid].matches++; });
 
     const winIds = (winner === "A") ? a : b;
     const loseIds = (winner === "A") ? b : a;
@@ -517,12 +512,10 @@ function computeStats() {
     loseIds.forEach(pid => { if (stats[pid]) stats[pid].losses++; });
   });
 
-  const arr = Object.values(stats).map(s => ({
+  return Object.values(stats).map(s => ({
     ...s,
     winrate: s.matches ? (s.wins / s.matches) : 0
   }));
-
-  return arr;
 }
 
 function renderRanking() {
@@ -557,13 +550,11 @@ function renderRanking() {
 
 function matchScoreLabel(m) {
   if (m.mode === "tiebreak") return `Tie-break ${m.pointsA ?? "?"}-${m.pointsB ?? "?"}`;
-
   let s = `${m.setsA}-${m.setsB} (BO${m.bestOf})`;
   if ((m.gamesA ?? 0) || (m.gamesB ?? 0)) s += ` | jeux ${m.gamesA}-${m.gamesB}`;
   if ((m.pointsA ?? 0) || (m.pointsB ?? 0)) s += ` | TB ${m.pointsA}-${m.pointsB}`;
   return s;
 }
-
 
 function renderMatches() {
   const tb = $("matchesTable").querySelector("tbody");
@@ -580,9 +571,7 @@ function renderMatches() {
         <td>${escapeHtml(bName)}</td>
         <td>${escapeHtml(matchScoreLabel(m))}</td>
         <td>${win}</td>
-        <td>
-          <button class="btn danger" data-delmatch="${m.id}">Supprimer</button>
-        </td>
+        <td><button class="btn danger" data-delmatch="${m.id}">Supprimer</button></td>
       </tr>
     `;
   }).join("");
@@ -591,8 +580,7 @@ function renderMatches() {
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-delmatch");
       if (!confirm("Supprimer ce match ?")) return;
-      const next = loadMatches().filter(m => m.id !== id);
-      saveMatches(next);
+      saveMatches(loadMatches().filter(m => m.id !== id));
       refreshAll();
     });
   });
@@ -604,16 +592,10 @@ function renderMatches() {
 function addPlayer() {
   const name = ($("playerName").value || "").trim();
   const level = Number($("playerLevel").value || "3");
-
   if (!name) return;
 
   const players = loadPlayers();
-  players.push({
-    id: uid(),
-    name,
-    level: clamp(level, 1, 5),
-    elo: 1000
-  });
+  players.push({ id: uid(), name, level: clamp(level, 1, 5), elo: 1000 });
   savePlayers(players);
 
   $("playerName").value = "";
@@ -633,10 +615,7 @@ function seedPlayers() {
     ["Emma Petit", 1],
     ["Fares Diallo", 5],
   ];
-  const next = players.concat(samples.map(([name, level]) => ({
-    id: uid(), name, level, elo: 1000
-  })));
-  savePlayers(next);
+  savePlayers(players.concat(samples.map(([name, level]) => ({ id: uid(), name, level, elo: 1000 }))));
   refreshAll();
 }
 
@@ -653,7 +632,7 @@ function escapeHtml(s){
 }
 
 /* -------------------------
-   Refresh all views
+   Refresh
 ------------------------- */
 function refreshAll() {
   fillPlayerSelects();
@@ -675,16 +654,12 @@ function wireEvents() {
 
   $("btnPointA").addEventListener("click", () => addPoint("A"));
   $("btnPointB").addEventListener("click", () => addPoint("B"));
-  $("btnGameA").addEventListener("click", () => addGame("A"));
-  $("btnGameB").addEventListener("click", () => addGame("B"));
 
   $("btnUndo").addEventListener("click", () => undo());
   $("btnFinish").addEventListener("click", () => finishMatch());
 
   $("btnAddPlayer").addEventListener("click", addPlayer);
-  $("playerName").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") addPlayer();
-  });
+  $("playerName").addEventListener("keydown", (e) => { if (e.key === "Enter") addPlayer(); });
   $("btnSeed").addEventListener("click", seedPlayers);
 
   $("rankingSort").addEventListener("change", renderRanking);
@@ -719,24 +694,10 @@ function wireEvents() {
    Init
 ------------------------- */
 function init() {
-  // ensure some defaults
-  const players = loadPlayers();
-  if (!players.length) {
-    savePlayers([]);
-  }
+  if (!loadPlayers()) savePlayers([]);
   resetMatch();
   wireEvents();
   setActiveRoute();
   refreshAll();
 }
-
 init();
-function setScoreButtonsEnabled(enabled){
-  ["btnPointA","btnPointB","btnGameA","btnGameB","btnUndo","btnFinish"].forEach(id=>{
-    const el = document.getElementById(id);
-    if (el) el.disabled = !enabled;
-    if (el) el.style.opacity = enabled ? "1" : ".5";
-    if (el) el.style.cursor = enabled ? "pointer" : "not-allowed";
-  });
-}
-
