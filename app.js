@@ -4,6 +4,16 @@
    - Matches: { id, dateISO, teamA:[id,id], teamB:[id,id], setsA, setsB, gamesA, gamesB, mode, winner:"A"|"B" }
    - Ranking derived from matches (wins/losses/matches/winrate) + ELO updated on save
 ========================================================= */
+function setScoreButtonsEnabled(enabled){
+  ["btnPointA","btnPointB","btnGameA","btnGameB","btnUndo","btnFinish"].forEach(id=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.disabled = !enabled;
+    el.style.opacity = enabled ? "1" : ".5";
+    el.style.cursor = enabled ? "pointer" : "not-allowed";
+  });
+}
+
 
 const LS_PLAYERS = "padel_players_v1";
 const LS_MATCHES = "padel_matches_v1";
@@ -547,14 +557,13 @@ function renderRanking() {
 
 function matchScoreLabel(m) {
   if (m.mode === "tiebreak") return `Tie-break ${m.pointsA ?? "?"}-${m.pointsB ?? "?"}`;
-  // sets
-  let s = `${m.setsA}-${m.setsB}`;
-  // si des jeux restaient au moment de l’enregistrement (ex: tu termines juste après set, ça sera souvent 0-0)
+
+  let s = `${m.setsA}-${m.setsB} (BO${m.bestOf})`;
   if ((m.gamesA ?? 0) || (m.gamesB ?? 0)) s += ` | jeux ${m.gamesA}-${m.gamesB}`;
-  // si tie-break de set en cours enregistré (rare, mais possible)
   if ((m.pointsA ?? 0) || (m.pointsB ?? 0)) s += ` | TB ${m.pointsA}-${m.pointsB}`;
   return s;
 }
+
 
 
 function renderMatches() {
@@ -731,4 +740,5 @@ function setScoreButtonsEnabled(enabled){
     if (el) el.style.cursor = enabled ? "pointer" : "not-allowed";
   });
 }
+
 
