@@ -1,44 +1,74 @@
 /* =========================================================
-   PADEL WEB APP (localStorage) — Mode simple
-   - Match 2v2
-   - Scoring: 0/15/30/40 en NO-AD (pas d'AV)
-     => à 40-40, le point suivant gagne le jeu
-   - Jeux + Sets automatiques
-   - Tie-break à 6-6 optionnel (points numériques 0..)
-   - Classement: stats + ELO (mis à jour à chaque match)
+   PADEL WEB APP — Firestore (Cloud) + NO-AD
+   - players: groups/{groupId}/players
+   - matches (historique): groups/{groupId}/matches
+   - match en cours: groups/{groupId}/state/activeMatch
+   - scoring: 0/15/30/40 NO-AD (pas d'AV), jeux+sets auto, TB à 6-6 optionnel
 ========================================================= */
-
-const LS_PLAYERS = "padel_players_v2";
-const LS_MATCHES = "padel_matches_v2";
 
 const $ = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
-function loadPlayers() {
-  try { return JSON.parse(localStorage.getItem(LS_PLAYERS)) || []; }
-  catch { return []; }
-}
-function savePlayers(players) {
-  localStorage.setItem(LS_PLAYERS, JSON.stringify(players));
-}
-function loadMatches() {
-  try { return JSON.parse(localStorage.getItem(LS_MATCHES)) || []; }
-  catch { return []; }
-}
-function saveMatches(matches) {
-  localStorage.setItem(LS_MATCHES, JSON.stringify(matches));
+/* =========================
+   0) Firebase CONFIG (À REMPLIR)
+========================= */
+const firebaseConfig = {
+  apiKey: "AIzaSyCJtTSJMNy1TejenUvyIGgpnlf9eAy3pDU",
+  authDomain: "padel-app-74bfd.firebaseapp.com",
+  projectId: "padel-app-74bfd",
+  storageBucket: "padel-app-74bfd.firebasestorage.app",
+  messagingSenderId: "435264651930",
+  appId: "1:435264651930:web:fc033cf2ca7b4ae3249523"
+};
+
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+const auth = firebase.auth();
+
+/* =========================
+   1) Group ID
+========================= */
+let GROUP_ID = localStorage.getItem("padel_groupId") || "club1";
+
+function setGroupId(v){
+  GROUP_ID = (v || "club1").trim();
+  localStorage.setItem("padel_groupId", GROUP_ID);
+  $("groupId").value = GROUP_ID;
 }
 
-function formatDate(iso) {
-  const d = new Date(iso);
-  return d.toLocaleString("fr-FR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+/* =========================
+   2) Auth anonyme
+========================= */
+async function ensureAuth(){
+  if (auth.currentUser) return auth.currentUser;
+  const res = await auth.signInAnonymously();
+  return res.user;
 }
 
-function clamp(n, a, b){ return Math.max(a, Math.min(b, n)); }
+/* =========================
+   3) Refs
+========================= */
+const refPlayers = () => db.collection(`groups/${GROUP_ID}/players`);
+const refMatches = () => db.collection(`groups/${GROUP_ID}/matches`);
+const refActive  = () => db.doc(`groups/${GROUP_ID}/state/activeMatch`);
 
-/* -------------------------
-   Routing
-------------------------- */
+/* =========================
+   4) Cache local (UI)
+========================= */
+let PLAYERS = [];
+let MATCHES = [];
+let activeUnsub = null;
+let playersUnsub = null;
+let matchesUnsub = null;
+
+/* match courant (copie de activeMatch) */
+let match = null;
+let undoStack = [];
+
+/* =========================
+   5) Routing
+========================= */
 const routes = {
   "/score": "view-score",
   "/players": "view-players",
@@ -62,145 +92,71 @@ function setActiveRoute() {
 }
 window.addEventListener("hashchange", setActiveRoute);
 
-/* -------------------------
-   State: current match
-------------------------- */
-let match = null;
-let undoStack = [];
-
-function resetMatch() {
-  match = {
-    id: uid(),
-    dateISO: new Date().toISOString(),
-    teamA: [null, null],
-    teamB: [null, null],
-    bestOf: Number($("bestOf").value), // 3 or 5
-    tiebreak: $("tiebreak").value,     // on/off
-    mode: $("mode").value,             // gamesets / tiebreak
-    serve: $("serveWho").value,        // A/B
-
-    setsA: 0, setsB: 0,
-    gamesA: 0, gamesB: 0,
-
-    // points:
-    // - gamesets: 0..3 maps to 0/15/30/40 (NO-AD)
-    // - tiebreak: numeric
-    pointsA: 0, pointsB: 0,
-
-    finished: false
-  };
-  undoStack = [];
-  renderMatch();
-  updateNeedPlayersMsg();
+/* =========================
+   6) Helpers
+========================= */
+function escapeHtml(s){
+  return String(s || "")
+    .replaceAll("&","&amp;")
+    .replaceAll("<","&lt;")
+    .replaceAll(">","&gt;")
+    .replaceAll('"',"&quot;")
+    .replaceAll("'","&#039;");
 }
 
-function snapshot() {
-  undoStack.push(JSON.stringify(match));
-  undoStack = undoStack.slice(-80);
-}
-function undo() {
-  if (!undoStack.length) return;
-  match = JSON.parse(undoStack.pop());
-  renderMatch();
-  updateNeedPlayersMsg();
-}
-
-/* -------------------------
-   UI helpers
-------------------------- */
 function getPlayerById(id){
-  return loadPlayers().find(p => p.id === id) || null;
+  return PLAYERS.find(p => p.id === id) || null;
 }
 
-function teamName(teamIds){
-  const ps = teamIds.map(getPlayerById).filter(Boolean);
+function teamName(ids){
+  const ps = (ids || []).map(getPlayerById).filter(Boolean);
   if (ps.length !== 2) return "—";
   return `${ps[0].name} + ${ps[1].name}`;
 }
 
+function formatDate(ts){
+  const d = new Date(ts);
+  return d.toLocaleString("fr-FR", { year:"numeric", month:"2-digit", day:"2-digit", hour:"2-digit", minute:"2-digit" });
+}
+
 function setServePill() {
+  if (!match) return;
   const A = $("serveA"), B = $("serveB");
   A.style.display = (match.serve === "A") ? "inline-block" : "none";
   B.style.display = (match.serve === "B") ? "inline-block" : "none";
 }
 
 function setScoreButtonsEnabled(enabled){
-  ["btnPointA","btnPointB","btnUndo","btnFinish"].forEach(id=>{
+  ["btnPointA","btnPointB","btnUndo","btnFinish","btnArchive","btnStopCloud"].forEach(id=>{
     const el = document.getElementById(id);
     if (!el) return;
     el.disabled = !enabled;
   });
 }
 
-/* -------------------------
-   Validation teams
-------------------------- */
-function validateTeams() {
+/* =========================
+   7) Validation équipes
+========================= */
+function validateTeamsUI() {
   const a1 = $("a1").value, a2 = $("a2").value, b1 = $("b1").value, b2 = $("b2").value;
   const ids = [a1,a2,b1,b2].filter(Boolean);
-
   if (ids.length < 4) return { ok:false, msg:"Choisis 4 joueurs (2 par équipe)." };
   const uniq = new Set(ids);
   if (uniq.size !== 4) return { ok:false, msg:"Chaque joueur doit être unique (pas de doublon)." };
   return { ok:true, msg:"" };
 }
 
-/* -------------------------
-   Scoring helpers
-------------------------- */
-function currentSetsToWin() {
-  return Math.ceil(match.bestOf / 2);
+/* =========================
+   8) Scoring (NO-AD)
+========================= */
+function setsToWin(bestOf){ return Math.ceil(bestOf / 2); }
+
+function isTiebreakSet(m){
+  if (m.mode !== "gamesets") return false;
+  if (m.tiebreak !== true) return false;
+  return m.gamesA === 6 && m.gamesB === 6;
 }
 
-function isTiebreakSet() {
-  if (match.mode !== "gamesets") return false;
-  if (match.tiebreak !== "on") return false;
-  return match.gamesA === 6 && match.gamesB === 6;
-}
-
-function winGame(team) {
-  if (match.mode !== "gamesets") return;
-
-  if (team === "A") match.gamesA++;
-  else match.gamesB++;
-
-  // alternance service par jeu (simple)
-  match.serve = (match.serve === "A") ? "B" : "A";
-
-  // set gagné: 6 jeux avec 2 d'écart, ou 7 (7-5 / 7-6)
-  const a = match.gamesA, b = match.gamesB;
-  const diff = Math.abs(a - b);
-
-  const hasSet =
-    ((a >= 6 || b >= 6) && diff >= 2 && a <= 7 && b <= 7) ||
-    (a === 7 || b === 7);
-
-  if (hasSet) {
-    if (a > b) match.setsA++;
-    else match.setsB++;
-
-    match.gamesA = 0;
-    match.gamesB = 0;
-    match.pointsA = 0;
-    match.pointsB = 0;
-  }
-}
-
-function winSetByTiebreak(team) {
-  if (team === "A") match.setsA++;
-  else match.setsB++;
-  match.gamesA = 0;
-  match.gamesB = 0;
-  match.pointsA = 0;
-  match.pointsB = 0;
-}
-
-function checkMatchFinished() {
-  const toWin = currentSetsToWin();
-  if (match.setsA >= toWin || match.setsB >= toWin) match.finished = true;
-}
-
-/* 0/15/30/40 (NO-AD, pas d'AV) */
 function pointText(p) {
   if (p <= 0) return "0";
   if (p === 1) return "15";
@@ -208,191 +164,203 @@ function pointText(p) {
   return "40";
 }
 
-/* -------------------------
-   Add point
-------------------------- */
-function addPointGamesets(team) {
-  // Tie-break de set à 6-6
-  if (isTiebreakSet()) {
-    if (team === "A") match.pointsA++;
-    else match.pointsB++;
+function winSet(m, winner){ // winner: "A"|"B"
+  if (winner === "A") m.setsA++;
+  else m.setsB++;
+  m.gamesA = 0; m.gamesB = 0;
+  m.pointsA = 0; m.pointsB = 0;
+}
 
-    const a = match.pointsA, b = match.pointsB;
-    const lead = Math.abs(a - b);
+function winGame(m, winner){ // winner: "A"|"B"
+  if (winner === "A") m.gamesA++;
+  else m.gamesB++;
 
-    if ((a >= 7 || b >= 7) && lead >= 2) {
-      winSetByTiebreak(a > b ? "A" : "B");
+  // alternance service par jeu (simple)
+  m.serve = (m.serve === "A") ? "B" : "A";
+
+  const a = m.gamesA, b = m.gamesB;
+  const diff = Math.abs(a - b);
+  const hasSet =
+    ((a >= 6 || b >= 6) && diff >= 2 && a <= 7 && b <= 7) ||
+    (a === 7 || b === 7);
+
+  if (hasSet) winSet(m, a > b ? "A" : "B");
+}
+
+function applyPoint(m, team){ // team: "A"|"B"
+  // TB set à 6-6
+  if (isTiebreakSet(m)) {
+    if (team === "A") m.pointsA++;
+    else m.pointsB++;
+    const lead = Math.abs(m.pointsA - m.pointsB);
+    if ((m.pointsA >= 7 || m.pointsB >= 7) && lead >= 2) {
+      winSet(m, m.pointsA > m.pointsB ? "A" : "B");
     }
     return;
   }
 
-  // Points classiques NO-AD
-  if (team === "A") match.pointsA++;
-  else match.pointsB++;
+  // NO-AD 0/15/30/40, point décisif à 40-40
+  if (team === "A") m.pointsA++;
+  else m.pointsB++;
 
-  const a = match.pointsA;
-  const b = match.pointsB;
+  const a = m.pointsA, b = m.pointsB;
 
-  // Cas avant 40-40 : dès qu'un côté atteint 4 points, il gagne le jeu
-  // (0/15/30/40 => 0..3, puis 4 = "point gagnant")
+  // avant 40-40
   if (a >= 4 && b <= 3) {
-    winGame("A");
-    match.pointsA = 0; match.pointsB = 0;
+    winGame(m, "A");
+    m.pointsA = 0; m.pointsB = 0;
     return;
   }
   if (b >= 4 && a <= 3) {
-    winGame("B");
-    match.pointsA = 0; match.pointsB = 0;
+    winGame(m, "B");
+    m.pointsA = 0; m.pointsB = 0;
     return;
   }
 
-  // 40-40 (3-3) -> point décisif : le point suivant gagne le jeu
+  // 40-40 -> point décisif (quand on arrive à 4-4)
   if (a === 4 && b === 4) {
-    winGame(team);
-    match.pointsA = 0; match.pointsB = 0;
+    winGame(m, team);
+    m.pointsA = 0; m.pointsB = 0;
   }
 }
 
-function addPointTiebreak(team) {
-  if (team === "A") match.pointsA++;
-  else match.pointsB++;
+/* =========================
+   9) Cloud: Démarrer / Stop / Point / Undo / Finish / Archive
+========================= */
+function makeActivePayloadFromUI(){
+  return {
+    id: uid(),
+    status: "LIVE",
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
 
-  const a = match.pointsA, b = match.pointsB;
-  const lead = Math.abs(a - b);
+    teamA: [$("a1").value, $("a2").value],
+    teamB: [$("b1").value, $("b2").value],
 
-  // TB only: 1 manche -> setsA/setsB = 1/0
-  if ((a >= 7 || b >= 7) && lead >= 2) {
-    match.setsA = a > b ? 1 : 0;
-    match.setsB = b > a ? 1 : 0;
-    match.finished = true;
-  }
+    bestOf: Number($("bestOf").value),
+    tiebreak: $("tiebreak").value === "on",
+    mode: $("mode").value,     // gamesets / tiebreak
+    serve: $("serveWho").value,
+
+    setsA: 0, setsB: 0,
+    gamesA: 0, gamesB: 0,
+    pointsA: 0, pointsB: 0,
+
+    undo: []
+  };
 }
 
-function addPoint(team) {
-  if (!match || match.finished) return;
+async function startCloudMatch(){
+  const v = validateTeamsUI();
+  if (!v.ok) { $("needPlayersMsg").textContent = v.msg; return; }
 
-  const v = validateTeams();
-  const players = loadPlayers();
-  if (players.length < 4 || !v.ok) {
-    $("matchStatus").textContent = v.ok ? "Ajoute au moins 4 joueurs dans la liste." : v.msg;
-    updateNeedPlayersMsg();
-    return;
-  }
-
-  snapshot();
-
-  match.mode = $("mode").value;
-  match.bestOf = Number($("bestOf").value);
-  match.tiebreak = $("tiebreak").value;
-  match.serve = $("serveWho").value;
-
-  if (match.mode === "tiebreak") addPointTiebreak(team);
-  else addPointGamesets(team);
-
-  checkMatchFinished();
-  renderMatch();
+  await ensureAuth();
+  const payload = makeActivePayloadFromUI();
+  await refActive().set(payload, { merge: false });
+  $("matchStatus").textContent = "✅ Match LIVE créé dans Firestore. Ta montre peut scorer.";
 }
 
-/* -------------------------
-   ELO update (individual)
-------------------------- */
-function expectedScore(rA, rB){
-  return 1 / (1 + Math.pow(10, (rB - rA)/400));
-}
-function updateEloAfterMatch(winnerTeam, teamAIds, teamBIds) {
-  const players = loadPlayers();
-  const teamA = teamAIds.map(id => players.find(p => p.id === id)).filter(Boolean);
-  const teamB = teamBIds.map(id => players.find(p => p.id === id)).filter(Boolean);
-  if (teamA.length !== 2 || teamB.length !== 2) return;
-
-  const avgA = (teamA[0].elo + teamA[1].elo) / 2;
-  const avgB = (teamB[0].elo + teamB[1].elo) / 2;
-
-  const expA = expectedScore(avgA, avgB);
-  const expB = expectedScore(avgB, avgA);
-
-  const K = 24;
-  const scoreA = (winnerTeam === "A") ? 1 : 0;
-  const scoreB = (winnerTeam === "B") ? 1 : 0;
-
-  const deltaA = K * (scoreA - expA);
-  const deltaB = K * (scoreB - expB);
-
-  teamA.forEach(p => p.elo = Math.round(p.elo + deltaA));
-  teamB.forEach(p => p.elo = Math.round(p.elo + deltaB));
-
-  players.forEach(p => p.elo = clamp(p.elo, 200, 3000));
-  savePlayers(players);
+async function stopCloudMatch(){
+  await ensureAuth();
+  await refActive().delete().catch(()=>{});
+  $("matchStatus").textContent = "🛑 activeMatch supprimé.";
 }
 
-/* -------------------------
-   Save match
-------------------------- */
-function finishMatch() {
-  if (!match) return;
+async function txUpdatePoint(team){
+  await ensureAuth();
 
-  const v = validateTeams();
-  if (!v.ok) { $("matchStatus").textContent = v.msg; return; }
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(refActive());
+    if (!snap.exists) throw new Error("Aucun match LIVE.");
+    const m = snap.data();
 
-  let winner = null;
+    if (m.status !== "LIVE") throw new Error("Match non LIVE.");
 
-  if (match.mode === "tiebreak") {
-    if (!match.finished) { $("matchStatus").textContent = "Le tie-break n'est pas terminé."; return; }
-    winner = match.setsA > match.setsB ? "A" : "B";
-  } else {
-    checkMatchFinished();
-    if (!match.finished) {
-      $("matchStatus").textContent = "Match pas terminé (sets). Continue à marquer des points.";
-      return;
-    }
-    winner = match.setsA > match.setsB ? "A" : "B";
-  }
+    // undo stack (limité)
+    const undo = Array.isArray(m.undo) ? m.undo : [];
+    const snapshot = {
+      setsA:m.setsA, setsB:m.setsB,
+      gamesA:m.gamesA, gamesB:m.gamesB,
+      pointsA:m.pointsA, pointsB:m.pointsB,
+      serve:m.serve,
+      updatedAt:m.updatedAt
+    };
+    undo.push(snapshot);
+    while (undo.length > 50) undo.shift();
 
-  match.teamA = [$("a1").value, $("a2").value];
-  match.teamB = [$("b1").value, $("b2").value];
-  match.bestOf = Number($("bestOf").value);
-  match.tiebreak = $("tiebreak").value;
-  match.mode = $("mode").value;
-  match.winner = winner;
+    // apply point
+    applyPoint(m, team);
 
-  const matches = loadMatches();
-  matches.unshift({
-    id: match.id,
-    dateISO: new Date().toISOString(),
-    teamA: match.teamA,
-    teamB: match.teamB,
-    setsA: match.setsA,
-    setsB: match.setsB,
-    gamesA: match.gamesA,
-    gamesB: match.gamesB,
-    pointsA: match.pointsA,
-    pointsB: match.pointsB,
-    bestOf: match.bestOf,
-    tiebreak: match.tiebreak,
-    mode: match.mode,
-    winner: match.winner
+    const finished = (m.setsA >= setsToWin(m.bestOf) || m.setsB >= setsToWin(m.bestOf));
+    m.status = finished ? "DONE" : "LIVE";
+    m.updatedAt = Date.now();
+    m.undo = undo;
+
+    tx.set(refActive(), m, { merge: true });
   });
-  saveMatches(matches);
-
-  updateEloAfterMatch(winner, match.teamA, match.teamB);
-
-  $("matchStatus").textContent = "✅ Match enregistré !";
-  refreshAll();
-
-  setTimeout(() => {
-    resetMatch();
-    $("matchStatus").textContent = "";
-  }, 600);
 }
 
-/* -------------------------
-   Rendering
-------------------------- */
-function fillPlayerSelects() {
-  const players = loadPlayers().slice().sort((a,b) => a.name.localeCompare(b.name, "fr"));
-  const selects = ["a1","a2","b1","b2"].map($);
+async function txUndo(){
+  await ensureAuth();
 
-  selects.forEach(sel => {
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(refActive());
+    if (!snap.exists) throw new Error("Aucun match.");
+    const m = snap.data();
+
+    const undo = Array.isArray(m.undo) ? m.undo : [];
+    if (!undo.length) return;
+
+    const prev = undo.pop();
+    tx.set(refActive(), {
+      setsA: prev.setsA, setsB: prev.setsB,
+      gamesA: prev.gamesA, gamesB: prev.gamesB,
+      pointsA: prev.pointsA, pointsB: prev.pointsB,
+      serve: prev.serve,
+      status: "LIVE",
+      updatedAt: Date.now(),
+      undo
+    }, { merge: true });
+  });
+}
+
+async function finishDone(){
+  await ensureAuth();
+  await refActive().set({ status:"DONE", updatedAt: Date.now() }, { merge:true });
+}
+
+async function archiveMatch(){
+  await ensureAuth();
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(refActive());
+    if (!snap.exists) throw new Error("Aucun match.");
+    const m = snap.data();
+
+    if (m.status !== "DONE") throw new Error("Le match n'est pas DONE.");
+
+    const winner = (m.setsA > m.setsB) ? "A" : "B";
+    const matchId = m.id || uid();
+
+    tx.set(refMatches().doc(matchId), {
+      ...m,
+      winner,
+      archivedAt: Date.now()
+    }, { merge: false });
+
+    // on passe activeMatch en ARCHIVED (ou delete si tu préfères)
+    tx.set(refActive(), { status:"ARCHIVED", updatedAt: Date.now() }, { merge:true });
+  });
+
+  $("matchStatus").textContent = "📦 Match archivé dans Historique.";
+}
+
+/* =========================
+   10) Render
+========================= */
+function fillPlayerSelects() {
+  const players = PLAYERS.slice().sort((a,b) => a.name.localeCompare(b.name, "fr"));
+  ["a1","a2","b1","b2"].forEach(id => {
+    const sel = $(id);
     const cur = sel.value;
     sel.innerHTML =
       `<option value="">— choisir —</option>` +
@@ -402,51 +370,62 @@ function fillPlayerSelects() {
 }
 
 function updateNeedPlayersMsg() {
-  const players = loadPlayers();
-  const v = validateTeams();
-  const need = players.length < 4;
-
-  let msg = "";
-  if (need) msg = `Il te faut au moins 4 joueurs enregistrés. Actuellement : ${players.length}.`;
-  else if (!v.ok) msg = v.msg;
-
-  $("needPlayersMsg").textContent = msg;
-  setScoreButtonsEnabled(!need && v.ok);
+  const v = validateTeamsUI();
+  $("needPlayersMsg").textContent = v.ok ? "" : v.msg;
 }
 
 function renderMatch() {
-  if (!match) return;
+  if (!match) {
+    $("cloudStatus").value = "Aucun activeMatch";
+    setScoreButtonsEnabled(false);
+    $("btnStartCloud").disabled = false;
+    return;
+  }
 
-  const aIds = [$("a1").value, $("a2").value];
-  const bIds = [$("b1").value, $("b2").value];
+  $("cloudStatus").value = `activeMatch: ${match.status}`;
+  $("btnStartCloud").disabled = true;
+
+  const aIds = match.teamA || [];
+  const bIds = match.teamB || [];
 
   $("teamAName").textContent = (aIds[0] && aIds[1]) ? teamName(aIds) : "Équipe A";
   $("teamBName").textContent = (bIds[0] && bIds[1]) ? teamName(bIds) : "Équipe B";
 
-  $("setsA").textContent = match.setsA;
-  $("setsB").textContent = match.setsB;
-  $("gamesA").textContent = match.gamesA;
-  $("gamesB").textContent = match.gamesB;
+  $("setsA").textContent = match.setsA ?? 0;
+  $("setsB").textContent = match.setsB ?? 0;
+  $("gamesA").textContent = match.gamesA ?? 0;
+  $("gamesB").textContent = match.gamesB ?? 0;
 
-  const inTB = (match.mode === "tiebreak") || isTiebreakSet();
-
-  $("pointsA").textContent = inTB ? match.pointsA : pointText(match.pointsA);
-  $("pointsB").textContent = inTB ? match.pointsB : pointText(match.pointsB);
-
+  const inTB = (match.mode === "tiebreak") || isTiebreakSet(match);
+  $("pointsA").textContent = inTB ? (match.pointsA ?? 0) : pointText(match.pointsA ?? 0);
+  $("pointsB").textContent = inTB ? (match.pointsB ?? 0) : pointText(match.pointsB ?? 0);
   $("pointsLabelA").textContent = inTB ? "tie-break" : "points";
   $("pointsLabelB").textContent = inTB ? "tie-break" : "points";
 
   setServePill();
 
-  if (match.finished) {
-    const winner = match.setsA > match.setsB ? "A" : "B";
-    $("matchStatus").textContent = `🏁 Match terminé (vainqueur : Équipe ${winner}). Clique sur “Terminer & enregistrer”.`;
+  const canPlay = (match.status === "LIVE");
+  setScoreButtonsEnabled(canPlay || match.status === "DONE");
+  $("btnArchive").disabled = !(match.status === "DONE");
+
+  if (match.status === "DONE") {
+    $("matchStatus").textContent = "🏁 Match DONE (tu peux archiver).";
+  } else if (match.status === "ARCHIVED") {
+    $("matchStatus").textContent = "📦 Match archivé.";
   }
+}
+
+function matchScoreLabel(m) {
+  if (m.mode === "tiebreak") return `Tie-break ${m.pointsA ?? "?"}-${m.pointsB ?? "?"}`;
+  let s = `${m.setsA}-${m.setsB} (BO${m.bestOf})`;
+  if ((m.gamesA ?? 0) || (m.gamesB ?? 0)) s += ` | jeux ${m.gamesA}-${m.gamesB}`;
+  if ((m.pointsA ?? 0) || (m.pointsB ?? 0)) s += ` | TB ${m.pointsA}-${m.pointsB}`;
+  return s;
 }
 
 function renderPlayersTable() {
   const tb = $("playersTable").querySelector("tbody");
-  const players = loadPlayers().slice().sort((a,b) => a.name.localeCompare(b.name, "fr"));
+  const players = PLAYERS.slice().sort((a,b) => a.name.localeCompare(b.name, "fr"));
 
   tb.innerHTML = players.map(p => `
     <tr>
@@ -454,51 +433,28 @@ function renderPlayersTable() {
       <td>N${p.level}</td>
       <td>${p.elo}</td>
       <td>
-        <button class="btn ghost" data-edit="${p.id}">Modifier</button>
         <button class="btn danger" data-del="${p.id}">Supprimer</button>
       </td>
     </tr>
   `).join("");
 
   tb.querySelectorAll("[data-del]").forEach(btn => {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       const id = btn.getAttribute("data-del");
       if (!confirm("Supprimer ce joueur ?")) return;
-      savePlayers(loadPlayers().filter(p => p.id !== id));
-      refreshAll();
-    });
-  });
-
-  tb.querySelectorAll("[data-edit]").forEach(btn => {
-    btn.addEventListener("click", () => {
-      const id = btn.getAttribute("data-edit");
-      const p = loadPlayers().find(x => x.id === id);
-      if (!p) return;
-
-      const name = prompt("Nom du joueur :", p.name);
-      if (!name) return;
-      const level = prompt("Niveau (1-5) :", String(p.level));
-      const lvl = clamp(Number(level || p.level), 1, 5);
-
-      const players = loadPlayers();
-      const idx = players.findIndex(x => x.id === id);
-      players[idx] = { ...players[idx], name: name.trim(), level: lvl };
-      savePlayers(players);
-      refreshAll();
+      await ensureAuth();
+      await refPlayers().doc(id).delete();
     });
   });
 }
 
 function computeStats() {
-  const players = loadPlayers();
-  const matches = loadMatches();
-
   const stats = {};
-  players.forEach(p => {
+  PLAYERS.forEach(p => {
     stats[p.id] = { id:p.id, name:p.name, level:p.level, elo:p.elo, matches:0, wins:0, losses:0 };
   });
 
-  matches.forEach(m => {
+  MATCHES.forEach(m => {
     const a = m.teamA || [];
     const b = m.teamB || [];
     const winner = m.winner;
@@ -512,10 +468,7 @@ function computeStats() {
     loseIds.forEach(pid => { if (stats[pid]) stats[pid].losses++; });
   });
 
-  return Object.values(stats).map(s => ({
-    ...s,
-    winrate: s.matches ? (s.wins / s.matches) : 0
-  }));
+  return Object.values(stats).map(s => ({ ...s, winrate: s.matches ? (s.wins/s.matches) : 0 }));
 }
 
 function renderRanking() {
@@ -524,17 +477,16 @@ function renderRanking() {
   const q = ($("rankingSearch").value || "").trim().toLowerCase();
 
   let rows = computeStats().filter(r => r.name.toLowerCase().includes(q));
-
   const sorters = {
-    elo: (a,b) => b.elo - a.elo,
-    wins: (a,b) => b.wins - a.wins || b.elo - a.elo,
+    elo: (a,b) => (b.elo||0) - (a.elo||0),
+    wins: (a,b) => b.wins - a.wins || (b.elo||0)-(a.elo||0),
     winrate: (a,b) => b.winrate - a.winrate || b.matches - a.matches,
     matches: (a,b) => b.matches - a.matches || b.wins - a.wins,
-    level: (a,b) => b.level - a.level || b.elo - a.elo,
+    level: (a,b) => b.level - a.level || (b.elo||0)-(a.elo||0),
   };
   rows.sort(sorters[sort] || sorters.elo);
 
-  tb.innerHTML = rows.map((r, i) => `
+  tb.innerHTML = rows.map((r,i)=>`
     <tr>
       <td>${i+1}</td>
       <td>${escapeHtml(r.name)}</td>
@@ -548,65 +500,84 @@ function renderRanking() {
   `).join("");
 }
 
-function matchScoreLabel(m) {
-  if (m.mode === "tiebreak") return `Tie-break ${m.pointsA ?? "?"}-${m.pointsB ?? "?"}`;
-  let s = `${m.setsA}-${m.setsB} (BO${m.bestOf})`;
-  if ((m.gamesA ?? 0) || (m.gamesB ?? 0)) s += ` | jeux ${m.gamesA}-${m.gamesB}`;
-  if ((m.pointsA ?? 0) || (m.pointsB ?? 0)) s += ` | TB ${m.pointsA}-${m.pointsB}`;
-  return s;
-}
-
 function renderMatches() {
   const tb = $("matchesTable").querySelector("tbody");
-  const matches = loadMatches();
-
-  tb.innerHTML = matches.map(m => {
-    const aName = teamName(m.teamA || []);
-    const bName = teamName(m.teamB || []);
-    const win = (m.winner === "A") ? "Équipe A" : "Équipe B";
-    return `
+  tb.innerHTML = MATCHES
+    .slice()
+    .sort((a,b)=> (b.archivedAt||0)-(a.archivedAt||0))
+    .map(m => `
       <tr>
-        <td>${formatDate(m.dateISO)}</td>
-        <td>${escapeHtml(aName)}</td>
-        <td>${escapeHtml(bName)}</td>
+        <td>${formatDate(m.archivedAt || m.updatedAt || m.createdAt || Date.now())}</td>
+        <td>${escapeHtml(teamName(m.teamA||[]))}</td>
+        <td>${escapeHtml(teamName(m.teamB||[]))}</td>
         <td>${escapeHtml(matchScoreLabel(m))}</td>
-        <td>${win}</td>
+        <td>${m.winner === "A" ? "Équipe A" : "Équipe B"}</td>
         <td><button class="btn danger" data-delmatch="${m.id}">Supprimer</button></td>
       </tr>
-    `;
-  }).join("");
+    `).join("");
 
-  tb.querySelectorAll("[data-delmatch]").forEach(btn => {
-    btn.addEventListener("click", () => {
+  tb.querySelectorAll("[data-delmatch]").forEach(btn=>{
+    btn.addEventListener("click", async ()=>{
       const id = btn.getAttribute("data-delmatch");
       if (!confirm("Supprimer ce match ?")) return;
-      saveMatches(loadMatches().filter(m => m.id !== id));
-      refreshAll();
+      await ensureAuth();
+      await refMatches().doc(id).delete();
     });
   });
 }
 
-/* -------------------------
-   Players actions
-------------------------- */
-function addPlayer() {
+/* =========================
+   11) Firestore listeners
+========================= */
+function stopListeners(){
+  if (activeUnsub) activeUnsub(); activeUnsub = null;
+  if (playersUnsub) playersUnsub(); playersUnsub = null;
+  if (matchesUnsub) matchesUnsub(); matchesUnsub = null;
+}
+
+async function startListeners(){
+  await ensureAuth();
+  stopListeners();
+
+  playersUnsub = refPlayers().onSnapshot((qs)=>{
+    PLAYERS = qs.docs.map(d => ({ id:d.id, ...d.data() }));
+    fillPlayerSelects();
+    renderPlayersTable();
+    renderRanking();
+    updateNeedPlayersMsg();
+  });
+
+  matchesUnsub = refMatches().onSnapshot((qs)=>{
+    MATCHES = qs.docs.map(d => ({ id:d.id, ...d.data() }));
+    renderMatches();
+    renderRanking();
+  });
+
+  activeUnsub = refActive().onSnapshot((doc)=>{
+    match = doc.exists ? doc.data() : null;
+    renderMatch();
+  });
+
+  $("cloudStatus").value = "Connecté";
+}
+
+/* =========================
+   12) Actions joueurs
+========================= */
+async function addPlayer() {
   const name = ($("playerName").value || "").trim();
   const level = Number($("playerLevel").value || "3");
   if (!name) return;
 
-  const players = loadPlayers();
-  players.push({ id: uid(), name, level: clamp(level, 1, 5), elo: 1000 });
-  savePlayers(players);
+  await ensureAuth();
+  const id = uid();
+  await refPlayers().doc(id).set({ name, level: clamp(level,1,5), elo: 1000, createdAt: Date.now() });
 
   $("playerName").value = "";
-  refreshAll();
 }
 
-function seedPlayers() {
-  const players = loadPlayers();
-  if (players.length) {
-    if (!confirm("Des joueurs existent déjà. Ajouter quand même des exemples ?")) return;
-  }
+async function seedPlayers() {
+  await ensureAuth();
   const samples = [
     ["Alex Martin", 3],
     ["Brian Dupont", 4],
@@ -615,89 +586,82 @@ function seedPlayers() {
     ["Emma Petit", 1],
     ["Fares Diallo", 5],
   ];
-  savePlayers(players.concat(samples.map(([name, level]) => ({ id: uid(), name, level, elo: 1000 }))));
-  refreshAll();
+  const batch = db.batch();
+  samples.forEach(([name, level])=>{
+    const id = uid();
+    batch.set(refPlayers().doc(id), { name, level, elo: 1000, createdAt: Date.now() });
+  });
+  await batch.commit();
 }
 
-/* -------------------------
-   Utilities
-------------------------- */
-function escapeHtml(s){
-  return String(s || "")
-    .replaceAll("&","&amp;")
-    .replaceAll("<","&lt;")
-    .replaceAll(">","&gt;")
-    .replaceAll('"',"&quot;")
-    .replaceAll("'","&#039;");
-}
-
-/* -------------------------
-   Refresh
-------------------------- */
-function refreshAll() {
+/* =========================
+   13) Refresh
+========================= */
+function refreshAll(){
   fillPlayerSelects();
   updateNeedPlayersMsg();
   renderPlayersTable();
   renderRanking();
   renderMatches();
-  if (match) renderMatch();
+  renderMatch();
 }
 
-/* -------------------------
-   Events
-------------------------- */
-function wireEvents() {
-  $("btnStart").addEventListener("click", () => {
-    resetMatch();
-    $("matchStatus").textContent = "";
+/* =========================
+   14) Events
+========================= */
+function wireEvents(){
+  $("groupId").value = GROUP_ID;
+  $("groupId").addEventListener("change", async ()=>{
+    setGroupId($("groupId").value);
+    await startListeners();
+    $("matchStatus").textContent = `Group changé: ${GROUP_ID}`;
   });
 
-  $("btnPointA").addEventListener("click", () => addPoint("A"));
-  $("btnPointB").addEventListener("click", () => addPoint("B"));
-
-  $("btnUndo").addEventListener("click", () => undo());
-  $("btnFinish").addEventListener("click", () => finishMatch());
-
   $("btnAddPlayer").addEventListener("click", addPlayer);
-  $("playerName").addEventListener("keydown", (e) => { if (e.key === "Enter") addPlayer(); });
+  $("playerName").addEventListener("keydown", (e)=>{ if (e.key==="Enter") addPlayer(); });
   $("btnSeed").addEventListener("click", seedPlayers);
 
   $("rankingSort").addEventListener("change", renderRanking);
   $("rankingSearch").addEventListener("input", renderRanking);
 
-  $("serveWho").addEventListener("change", () => {
-    if (!match) return;
-    match.serve = $("serveWho").value;
-    renderMatch();
+  ["a1","a2","b1","b2","bestOf","tiebreak","mode","serveWho"].forEach(id=>{
+    $(id).addEventListener("change", updateNeedPlayersMsg);
   });
 
-  ["a1","a2","b1","b2","bestOf","tiebreak","mode"].forEach(id => {
-    $(id).addEventListener("change", () => {
-      updateNeedPlayersMsg();
-      if (match) {
-        match.bestOf = Number($("bestOf").value);
-        match.tiebreak = $("tiebreak").value;
-        match.mode = $("mode").value;
-        renderMatch();
-      }
-    });
-  });
+  $("btnStartCloud").addEventListener("click", startCloudMatch);
+  $("btnStopCloud").addEventListener("click", stopCloudMatch);
 
-  $("btnClearMatches").addEventListener("click", () => {
-    if (!confirm("Supprimer tout l'historique des matchs ?")) return;
-    saveMatches([]);
-    refreshAll();
+  $("btnPointA").addEventListener("click", ()=> txUpdatePoint("A").catch(e => $("matchStatus").textContent = e.message));
+  $("btnPointB").addEventListener("click", ()=> txUpdatePoint("B").catch(e => $("matchStatus").textContent = e.message));
+  $("btnUndo").addEventListener("click", ()=> txUndo().catch(e => $("matchStatus").textContent = e.message));
+  $("btnFinish").addEventListener("click", ()=> finishDone().catch(e => $("matchStatus").textContent = e.message));
+  $("btnArchive").addEventListener("click", ()=> archiveMatch().catch(e => $("matchStatus").textContent = e.message));
+
+  $("btnClearMatches").addEventListener("click", async ()=>{
+    if (!confirm("Supprimer tout l'historique ?")) return;
+    await ensureAuth();
+    const qs = await refMatches().get();
+    const batch = db.batch();
+    qs.docs.forEach(d => batch.delete(d.ref));
+    await batch.commit();
   });
 }
 
-/* -------------------------
-   Init
-------------------------- */
-function init() {
-  if (!loadPlayers()) savePlayers([]);
-  resetMatch();
+/* =========================
+   15) Init
+========================= */
+async function init(){
+  setGroupId(GROUP_ID);
   wireEvents();
   setActiveRoute();
-  refreshAll();
+
+  try {
+    await ensureAuth();
+    await startListeners();
+  } catch (e) {
+    $("cloudStatus").value = "Erreur Firebase";
+    $("matchStatus").textContent = "⚠️ Firebase non configuré (firebaseConfig).";
+    console.error(e);
+  }
 }
 init();

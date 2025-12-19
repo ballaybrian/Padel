@@ -7,6 +7,7 @@
   <link rel="manifest" href="manifest.webmanifest">
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
   <header class="topbar">
     <div class="brand" role="button" tabindex="0" onclick="location.hash='#/score'">
@@ -23,9 +24,30 @@
   </header>
 
   <main class="container">
+
     <!-- SCORE -->
     <section id="view-score" class="view">
       <h1>Compteur de match (2 vs 2)</h1>
+
+      <div class="card">
+        <h2>Cloud (Firebase)</h2>
+
+        <div class="grid-2">
+          <div class="row">
+            <label>Group ID (même pour téléphone + montre)</label>
+            <input id="groupId" placeholder="ex: club1" />
+          </div>
+
+          <div class="row">
+            <label>Statut</label>
+            <input id="cloudStatus" disabled value="..." />
+          </div>
+        </div>
+
+        <p class="muted">
+          Mets <b>club1</b> si tu es seul. La montre doit utiliser le même <b>Group ID</b>.
+        </p>
+      </div>
 
       <div class="card">
         <h2>Choix des joueurs</h2>
@@ -64,6 +86,7 @@
               <option value="5">3 sets gagnants (Best of 5)</option>
             </select>
           </div>
+
           <div class="row">
             <label>Jeu décisif (tie-break à 6-6)</label>
             <select id="tiebreak">
@@ -73,15 +96,34 @@
           </div>
         </div>
 
+        <div class="grid-2">
+          <div class="row">
+            <label>Mode</label>
+            <select id="mode">
+              <option value="gamesets" selected>Jeux + sets (NO-AD)</option>
+              <option value="tiebreak">Tie-break uniquement</option>
+            </select>
+          </div>
+
+          <div class="row">
+            <label>Service</label>
+            <select id="serveWho">
+              <option value="A">Équipe A</option>
+              <option value="B">Équipe B</option>
+            </select>
+          </div>
+        </div>
+
         <div class="actions">
-          <button class="btn" id="btnStart">Démarrer / Réinitialiser le match</button>
+          <button class="btn primary" id="btnStartCloud">Démarrer match (Cloud)</button>
+          <button class="btn danger" id="btnStopCloud">Arrêter (effacer activeMatch)</button>
         </div>
 
         <p class="muted" id="needPlayersMsg"></p>
       </div>
 
       <div class="card">
-        <h2>Score</h2>
+        <h2>Score (LIVE depuis Firestore)</h2>
 
         <div class="scoreboard">
           <div class="team">
@@ -131,27 +173,10 @@
 
         <div class="divider"></div>
 
-        <div class="grid-2">
-          <div class="row">
-            <label>Mode</label>
-            <select id="mode">
-              <option value="gamesets" selected>Jeux + sets (NO-AD)</option>
-              <option value="tiebreak">Tie-break uniquement</option>
-            </select>
-          </div>
-
-          <div class="row">
-            <label>Service</label>
-            <select id="serveWho">
-              <option value="A">Équipe A</option>
-              <option value="B">Équipe B</option>
-            </select>
-          </div>
-        </div>
-
         <div class="actions">
           <button class="btn danger" id="btnUndo">Annuler dernier point</button>
-          <button class="btn" id="btnFinish">Terminer & enregistrer le match</button>
+          <button class="btn" id="btnFinish">Terminer (DONE)</button>
+          <button class="btn" id="btnArchive">Archiver dans Historique</button>
         </div>
 
         <p class="muted" id="matchStatus"></p>
@@ -185,7 +210,8 @@
           <button class="btn primary" id="btnAddPlayer">Ajouter</button>
           <button class="btn ghost" id="btnSeed">Créer des joueurs exemples</button>
         </div>
-        <p class="muted">Classement : ELO + stats (MJ/V/D).</p>
+
+        <p class="muted">Les joueurs sont stockés dans Firestore (groupId).</p>
       </div>
 
       <div class="card">
@@ -273,15 +299,22 @@
           </table>
         </div>
 
-        <p class="muted">Matchs 2v2, classement individuel.</p>
+        <p class="muted">Historique stocké dans Firestore (groupId).</p>
       </div>
     </section>
+
   </main>
 
   <footer class="footer">
-    <span class="muted">PADEL • GitHub Pages • Données en local (localStorage)</span>
+    <span class="muted">PADEL • GitHub Pages • Firebase Firestore</span>
   </footer>
 
+  <!-- Firebase (compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
+
+  <!-- Ton app -->
   <script src="app.js"></script>
 </body>
 </html>
