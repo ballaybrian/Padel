@@ -3,318 +3,68 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>PADEL • Web App</title>
-  <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="style.css" />
+  <title>Padel – Live</title>
+  <style>
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;background:#101010;color:#eee}
+    header{padding:12px 14px;border-bottom:1px solid #222;display:flex;gap:10px;align-items:center}
+    header b{color:#26D07C}
+    main{padding:14px;display:grid;gap:12px}
+    .card{background:#161616;border:1px solid #222;border-radius:14px;padding:12px}
+    .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+    input,select,button{background:#0f0f0f;color:#eee;border:1px solid #2a2a2a;border-radius:12px;padding:10px}
+    button{background:#26D07C;color:#06110c;border:none;font-weight:700;cursor:pointer}
+    button.secondary{background:#2a2a2a;color:#eee}
+    .big{font-size:36px;font-weight:900}
+    .muted{color:#a8a8a8}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  </style>
 </head>
-
 <body>
-  <header class="topbar">
-    <div class="brand" role="button" tabindex="0" onclick="location.hash='#/score'">
-      <span class="logo">🎾</span>
-      <span class="title">PADEL</span>
+  <header>
+    <div style="flex:1">
+      <div><b>PADEL</b> — Téléphone = moteur / Montre = télécommande</div>
+      <div class="muted">Group: <span id="gLbl">club1</span> • Lock: <span id="lockLbl">…</span></div>
     </div>
-
-    <nav class="nav">
-      <a href="#/score" data-route>Score</a>
-      <a href="#/players" data-route>Joueurs</a>
-      <a href="#/ranking" data-route>Classement</a>
-      <a href="#/history" data-route>Historique</a>
-    </nav>
+    <input id="groupId" value="club1" style="width:120px" />
+    <button id="btnGroup">OK</button>
   </header>
 
-  <main class="container">
-
-    <!-- SCORE -->
-    <section id="view-score" class="view">
-      <h1>Compteur de match (2 vs 2)</h1>
-
-      <div class="card">
-        <h2>Cloud (Firebase)</h2>
-
-        <div class="grid-2">
-          <div class="row">
-            <label>Group ID (même pour téléphone + montre)</label>
-            <input id="groupId" placeholder="ex: club1" />
-          </div>
-
-          <div class="row">
-            <label>Statut</label>
-            <input id="cloudStatus" disabled value="..." />
-          </div>
-        </div>
-
-        <p class="muted">
-          Mets <b>club1</b> si tu es seul. La montre doit utiliser le même <b>Group ID</b>.
-        </p>
+  <main>
+    <div class="card">
+      <div class="row">
+        <button id="btnStart">Démarrer match</button>
+        <button id="btnLive" class="secondary">Forcer LIVE</button>
+        <button id="btnDone" class="secondary">Forcer DONE</button>
       </div>
+      <div class="row muted" id="statusLine">…</div>
+    </div>
 
-      <div class="card">
-        <h2>Choix des joueurs</h2>
-
-        <div class="grid-2">
-          <div>
-            <h3>Équipe A</h3>
-            <div class="row">
-              <label>Joueur A1</label>
-              <select id="a1"></select>
-            </div>
-            <div class="row">
-              <label>Joueur A2</label>
-              <select id="a2"></select>
-            </div>
-          </div>
-
-          <div>
-            <h3>Équipe B</h3>
-            <div class="row">
-              <label>Joueur B1</label>
-              <select id="b1"></select>
-            </div>
-            <div class="row">
-              <label>Joueur B2</label>
-              <select id="b2"></select>
-            </div>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="row">
-            <label>Sets gagnants</label>
-            <select id="bestOf">
-              <option value="3">2 sets gagnants (Best of 3)</option>
-              <option value="5">3 sets gagnants (Best of 5)</option>
-            </select>
-          </div>
-
-          <div class="row">
-            <label>Jeu décisif (tie-break à 6-6)</label>
-            <select id="tiebreak">
-              <option value="on">Oui</option>
-              <option value="off">Non</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="grid-2">
-          <div class="row">
-            <label>Mode</label>
-            <select id="mode">
-              <option value="gamesets" selected>Jeux + sets (NO-AD)</option>
-              <option value="tiebreak">Tie-break uniquement</option>
-            </select>
-          </div>
-
-          <div class="row">
-            <label>Service</label>
-            <select id="serveWho">
-              <option value="A">Équipe A</option>
-              <option value="B">Équipe B</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn primary" id="btnStartCloud">Démarrer match (Cloud)</button>
-          <button class="btn danger" id="btnStopCloud">Arrêter (effacer activeMatch)</button>
-        </div>
-
-        <p class="muted" id="needPlayersMsg"></p>
+    <div class="card grid">
+      <div>
+        <div class="muted">Équipe A</div>
+        <div class="big" id="scoreA">0</div>
+        <div class="muted" id="setsGamesA">Sets 0 • Jeux 0</div>
       </div>
-
-      <div class="card">
-        <h2>Score (LIVE depuis Firestore)</h2>
-
-        <div class="scoreboard">
-          <div class="team">
-            <div class="team-head">
-              <div class="team-name" id="teamAName">Équipe A</div>
-              <div class="pill" id="serveA">SERVICE</div>
-            </div>
-
-            <div class="scoreline">
-              <div class="big"><span id="setsA">0</span><small>sets</small></div>
-              <div class="big"><span id="gamesA">0</span><small>jeux</small></div>
-            </div>
-
-            <div class="points">
-              <div class="point bigPoint">
-                <span id="pointsA">0</span><small id="pointsLabelA">points</small>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button class="btn primary" id="btnPointA">+1 point (A)</button>
-            </div>
-          </div>
-
-          <div class="team">
-            <div class="team-head">
-              <div class="team-name" id="teamBName">Équipe B</div>
-              <div class="pill" id="serveB">SERVICE</div>
-            </div>
-
-            <div class="scoreline">
-              <div class="big"><span id="setsB">0</span><small>sets</small></div>
-              <div class="big"><span id="gamesB">0</span><small>jeux</small></div>
-            </div>
-
-            <div class="points">
-              <div class="point bigPoint">
-                <span id="pointsB">0</span><small id="pointsLabelB">points</small>
-              </div>
-            </div>
-
-            <div class="actions">
-              <button class="btn primary" id="btnPointB">+1 point (B)</button>
-            </div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="actions">
-          <button class="btn danger" id="btnUndo">Annuler dernier point</button>
-          <button class="btn" id="btnFinish">Terminer (DONE)</button>
-          <button class="btn" id="btnArchive">Archiver dans Historique</button>
-        </div>
-
-        <p class="muted" id="matchStatus"></p>
+      <div>
+        <div class="muted">Équipe B</div>
+        <div class="big" id="scoreB">0</div>
+        <div class="muted" id="setsGamesB">Sets 0 • Jeux 0</div>
       </div>
-    </section>
+    </div>
 
-    <!-- PLAYERS -->
-    <section id="view-players" class="view">
-      <h1>Joueurs</h1>
-
-      <div class="card">
-        <h2>Ajouter un joueur</h2>
-        <div class="grid-2">
-          <div class="row">
-            <label>Nom</label>
-            <input id="playerName" type="text" placeholder="Ex: Alex Martin" />
-          </div>
-          <div class="row">
-            <label>Niveau</label>
-            <select id="playerLevel">
-              <option value="1">1 (débutant)</option>
-              <option value="2">2</option>
-              <option value="3" selected>3</option>
-              <option value="4">4</option>
-              <option value="5">5 (expert)</option>
-            </select>
-          </div>
-        </div>
-
-        <div class="actions">
-          <button class="btn primary" id="btnAddPlayer">Ajouter</button>
-          <button class="btn ghost" id="btnSeed">Créer des joueurs exemples</button>
-        </div>
-
-        <p class="muted">Les joueurs sont stockés dans Firestore (groupId).</p>
+    <div class="card">
+      <div class="muted">
+        Actions reçues depuis la montre: /groups/{groupId}/state/activeMatch/actions
       </div>
-
-      <div class="card">
-        <h2>Liste</h2>
-        <div class="tableWrap">
-          <table class="table" id="playersTable">
-            <thead>
-              <tr>
-                <th>Nom</th>
-                <th>Niveau</th>
-                <th>ELO</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- RANKING -->
-    <section id="view-ranking" class="view">
-      <h1>Classement joueurs</h1>
-
-      <div class="card">
-        <div class="grid-2">
-          <div class="row">
-            <label>Trier par</label>
-            <select id="rankingSort">
-              <option value="elo" selected>ELO</option>
-              <option value="wins">Victoires</option>
-              <option value="winrate">Winrate</option>
-              <option value="matches">Matchs joués</option>
-              <option value="level">Niveau</option>
-            </select>
-          </div>
-          <div class="row">
-            <label>Recherche</label>
-            <input id="rankingSearch" placeholder="Nom..." />
-          </div>
-        </div>
-
-        <div class="tableWrap">
-          <table class="table" id="rankingTable">
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Joueur</th>
-                <th>Niveau</th>
-                <th>ELO</th>
-                <th>MJ</th>
-                <th>V</th>
-                <th>D</th>
-                <th>Win%</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-      </div>
-    </section>
-
-    <!-- HISTORY -->
-    <section id="view-history" class="view">
-      <h1>Historique des matchs</h1>
-
-      <div class="card">
-        <div class="actions">
-          <button class="btn danger" id="btnClearMatches">Tout supprimer</button>
-        </div>
-
-        <div class="tableWrap">
-          <table class="table" id="matchesTable">
-            <thead>
-              <tr>
-                <th>Date</th>
-                <th>Équipe A</th>
-                <th>Équipe B</th>
-                <th>Score</th>
-                <th>Vainqueur</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody></tbody>
-          </table>
-        </div>
-
-        <p class="muted">Historique stocké dans Firestore (groupId).</p>
-      </div>
-    </section>
-
+      <div id="log" style="margin-top:8px;font-family:ui-monospace,Consolas,monospace;font-size:12px;white-space:pre-wrap"></div>
+    </div>
   </main>
 
-  <footer class="footer">
-    <span class="muted">PADEL • GitHub Pages • Firebase Firestore</span>
-  </footer>
+  <!-- Firebase compat (simple pour GitHub Pages) -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-firestore-compat.js"></script>
 
-  <!-- Firebase (compat) -->
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/10.12.4/firebase-firestore-compat.js"></script>
-
-  <!-- Ton app -->
-  <script src="app.js"></script>
+  <script src="./app.js"></script>
 </body>
 </html>
