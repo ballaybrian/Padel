@@ -1,13 +1,17 @@
 /* =========================================================
-   PADEL WEB APP — PHONE = ENGINE, WATCH = REMOTE
-   - active match: groups/{gid}/state/activeMatch
-   - actions:     groups/{gid}/state/activeMatch/actions/{id}
-   - lock:        groups/{gid}/state/processorLock
+   PADEL WEB APP — Firestore + NO-AD + Watch Actions (Option 3)
+   - players: groups/{gid}/players
+   - activeMatch: groups/{gid}/state/activeMatch
+   - actions: groups/{gid}/state/activeMatch/actions
 ========================================================= */
 
 const $ = (id) => document.getElementById(id);
 const uid = () => Math.random().toString(16).slice(2) + Date.now().toString(16);
+const clamp = (n, a, b) => Math.max(a, Math.min(b, n));
 
+/* =========================
+   0) Firebase CONFIG
+========================= */
 const firebaseConfig = {
   apiKey: "AIzaSyCJtTSJMNy1TejenUvyIGgpnlf9eAy3pDU",
   authDomain: "padel-app-74bfd.firebaseapp.com",
@@ -21,284 +25,446 @@ firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
 
+/* =========================
+   1) Group ID
+========================= */
 let GROUP_ID = localStorage.getItem("padel_groupId") || "club1";
-let CLIENT_ID = localStorage.getItem("padel_clientId") || uid();
-localStorage.setItem("padel_clientId", CLIENT_ID);
-
-function refActive() { return db.doc(`groups/${GROUP_ID}/state/activeMatch`); }
-function refActions() { return refActive().collection("actions"); }
-function refLock() { return db.doc(`groups/${GROUP_ID}/state/processorLock`); }
-
-function log(s){
-  const el = $("log");
-  el.textContent = (s + "\n" + el.textContent).slice(0, 5000);
-}
-
 function setGroupId(v){
   GROUP_ID = (v || "club1").trim();
   localStorage.setItem("padel_groupId", GROUP_ID);
-  $("gLbl").textContent = GROUP_ID;
   $("groupId").value = GROUP_ID;
+  stopAllListeners();
+  boot(); // relance tout avec le nouveau groupId
 }
 
-// ---------- AUTH ----------
+/* =========================
+   2) Auth anonyme
+========================= */
 async function ensureAuth(){
   if (auth.currentUser) return auth.currentUser;
   const res = await auth.signInAnonymously();
   return res.user;
 }
 
-// ---------- SCORING (NO-AD + TB) ----------
-function setsToWin(bestOf){ return Math.floor((bestOf + 1) / 2); }
+/* =========================
+   3) Refs
+========================= */
+const refPlayers = () => db.collection(`groups/${GROUP_ID}/players`);
+const refMatches = () => db.collection(`groups/${GROUP_ID}/matches`);
+const refActive  = () => db.doc(`groups/${GROUP_ID}/state/activeMatch`);
+const refActions = () => db.collection(`groups/${GROUP_ID}/state/activeMatch/actions`);
 
-function isTbSet(mode, tiebreak, gamesA, gamesB){
-  return (mode === "gamesets" && !!tiebreak && gamesA === 6 && gamesB === 6);
+/* =========================
+   4) UI helpers
+========================= */
+function setTab(view){
+  document.querySelectorAll(".tab").forEach(b => b.classList.remove("active"));
+  document.querySelector(`.tab[data-view="${view}"]`).classList.add("active");
+
+  document.querySelectorAll(".view").forEach(v => v.classList.add("hidden"));
+  $(`view-${view}`).classList.remove("hidden");
 }
 
-function winGame(state, winnerA){
-  if (winnerA) state.gamesA++; else state.gamesB++;
-
-  const diff = Math.abs(state.gamesA - state.gamesB);
-  const hasSet =
-    ((state.gamesA >= 6 || state.gamesB >= 6) && diff >= 2 && state.gamesA <= 7 && state.gamesB <= 7) ||
-    (state.gamesA === 7 || state.gamesB === 7);
-
-  if (hasSet) winSet(state, state.gamesA > state.gamesB);
+function fmtPoint(p, inTb){
+  if (inTb) return String(p);
+  if (p === 0) return "0";
+  if (p === 1) return "15";
+  if (p === 2) return "30";
+  return "40";
 }
 
-function winSet(state, winnerA){
-  if (winnerA) state.setsA++; else state.setsB++;
-  state.gamesA = 0; state.gamesB = 0;
-  state.pointsA = 0; state.pointsB = 0;
-}
+/* =========================
+   5) State local (render)
+========================= */
+let playersCache = [];
+let activeMatchCache = null;
 
-function applyAddPoint(state, team){
-  const mode = state.mode || "gamesets";
-  const tiebreak = !!state.tiebreak;
+function renderPlayersSelects(){
+  const options = [`<option value="">— choisir —</option>`]
+    .concat(playersCache.map(p => `<option value="${p.id}">${escapeHtml(p.name)} (N${p.level})</option>`))
+    .join("");
 
-  if (mode === "tiebreak"){
-    if (team === "A") state.pointsA++; else state.pointsB++;
-    return;
-  }
-
-  // TB in set at 6-6
-  if (isTbSet(mode, tiebreak, state.gamesA, state.gamesB)){
-    if (team === "A") state.pointsA++; else state.pointsB++;
-    const lead = Math.abs(state.pointsA - state.pointsB);
-    if ((state.pointsA >= 7 || state.pointsB >= 7) && lead >= 2){
-      winSet(state, state.pointsA > state.pointsB);
-    }
-    return;
-  }
-
-  // NO-AD classic points (0/15/30/40)
-  if (team === "A") state.pointsA++; else state.pointsB++;
-
-  if (state.pointsA >= 4 && state.pointsB <= 3){
-    winGame(state, true); state.pointsA = 0; state.pointsB = 0;
-  } else if (state.pointsB >= 4 && state.pointsA <= 3){
-    winGame(state, false); state.pointsA = 0; state.pointsB = 0;
-  } else if (state.pointsA === 4 && state.pointsB === 4){
-    // 40-40 point décisif (NO-AD)
-    winGame(state, team === "A"); state.pointsA = 0; state.pointsB = 0;
-  }
-}
-
-function snapshotToState(snap){
-  const d = snap.data() || {};
-  return {
-    status: d.status || "LIVE",
-    mode: d.mode || "gamesets",
-    tiebreak: d.tiebreak ?? true,
-    bestOf: d.bestOf || 3,
-
-    pointsA: d.pointsA || 0,
-    pointsB: d.pointsB || 0,
-    gamesA: d.gamesA || 0,
-    gamesB: d.gamesB || 0,
-    setsA: d.setsA || 0,
-    setsB: d.setsB || 0,
-
-    undo: Array.isArray(d.undo) ? d.undo : []
-  };
-}
-
-// ---------- LOCK (lease) ----------
-async function tryAcquireLock(){
-  const now = Date.now();
-  const leaseMs = 25_000; // 25s lease
-  const lockRef = refLock();
-
-  return db.runTransaction(async (tx) => {
-    const snap = await tx.get(lockRef);
-    const cur = snap.exists ? (snap.data() || {}) : {};
-    const expiresAt = cur.expiresAt || 0;
-    const owner = cur.owner || null;
-
-    const free = (expiresAt < now) || (owner === CLIENT_ID);
-
-    if (!free) return false;
-
-    tx.set(lockRef, {
-      owner: CLIENT_ID,
-      expiresAt: now + leaseMs,
-      updatedAt: now
-    }, { merge: true });
-
-    return true;
+  ["a1","a2","b1","b2"].forEach(id => {
+    $(id).innerHTML = options;
   });
 }
 
-let lockTimer = null;
-let haveLock = false;
-
-async function startLockLoop(){
-  if (lockTimer) clearInterval(lockTimer);
-
-  async function tick(){
-    try{
-      const ok = await tryAcquireLock();
-      haveLock = !!ok;
-      $("lockLbl").textContent = haveLock ? "OK" : "NO";
-    }catch(e){
-      haveLock = false;
-      $("lockLbl").textContent = "ERR";
-    }
+function renderPlayersList(){
+  const box = $("playersList");
+  if (!playersCache.length){
+    box.innerHTML = `<div class="muted">Aucun joueur</div>`;
+    return;
   }
+  box.innerHTML = playersCache.map(p => `
+    <div class="item">
+      <div><b>${escapeHtml(p.name)}</b> <span class="muted">(N${p.level})</span></div>
+      <button class="danger" data-del="${p.id}">Supprimer</button>
+    </div>
+  `).join("");
 
-  await tick();
-  lockTimer = setInterval(tick, 10_000);
-}
-
-// ---------- ACTION PROCESSOR ----------
-function startActionProcessor(){
-  // écoute des actions (order by createdAt)
-  refActions().orderBy("createdAt", "asc").onSnapshot(async (snap) => {
-    if (!haveLock) return;
-    const changes = snap.docChanges().filter(c => c.type === "added");
-    for (const ch of changes){
-      const actionDoc = ch.doc;
-      const action = actionDoc.data() || {};
-      await processOneAction(actionDoc.ref, action).catch(e => log("ERR action: " + e.message));
-    }
-  });
-}
-
-async function processOneAction(actionRef, action){
-  const type = action.type;
-  const team = action.team;
-
-  await db.runTransaction(async (tx) => {
-    if (!haveLock) return;
-
-    const s = await tx.get(refActive());
-    if (!s.exists) return;
-
-    const state = snapshotToState(s);
-
-    // push undo
-    state.undo.push({
-      setsA: state.setsA, setsB: state.setsB,
-      gamesA: state.gamesA, gamesB: state.gamesB,
-      pointsA: state.pointsA, pointsB: state.pointsB
+  box.querySelectorAll("[data-del]").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      await refPlayers().doc(btn.dataset.del).delete();
     });
-    while (state.undo.length > 50) state.undo.shift();
-
-    if (type === "ADD_POINT"){
-      if (state.status !== "LIVE") return;
-      applyAddPoint(state, team === "B" ? "B" : "A");
-    } else if (type === "UNDO"){
-      if (state.status !== "LIVE") return;
-      const prev = state.undo.pop();
-      if (!prev) return;
-      state.setsA = prev.setsA; state.setsB = prev.setsB;
-      state.gamesA = prev.gamesA; state.gamesB = prev.gamesB;
-      state.pointsA = prev.pointsA; state.pointsB = prev.pointsB;
-    } else if (type === "FIN"){
-      state.status = "DONE";
-    } else if (type === "RESUME"){
-      state.status = "LIVE";
-    }
-
-    // finish match if sets reached
-    const win = setsToWin(state.bestOf || 3);
-    if (state.setsA >= win || state.setsB >= win) state.status = "DONE";
-
-    tx.update(refActive(), {
-      status: state.status,
-      mode: state.mode,
-      tiebreak: state.tiebreak,
-      bestOf: state.bestOf,
-
-      pointsA: state.pointsA, pointsB: state.pointsB,
-      gamesA: state.gamesA, gamesB: state.gamesB,
-      setsA: state.setsA, setsB: state.setsB,
-
-      undo: state.undo,
-      updatedAt: Date.now()
-    });
-
-    // delete processed action
-    tx.delete(actionRef);
   });
-
-  log(`OK ${action.type}${action.team ? " "+action.team : ""} (${action.source || "?"})`);
 }
 
-// ---------- UI bind ----------
-function renderScore(snap){
-  if (!snap.exists){
-    $("statusLine").textContent = "NO MATCH";
-    $("scoreA").textContent = "0";
-    $("scoreB").textContent = "0";
-    $("setsGamesA").textContent = "Sets 0 • Jeux 0";
-    $("setsGamesB").textContent = "Sets 0 • Jeux 0";
+function renderActive(){
+  const m = activeMatchCache;
+
+  if (!m){
+    $("statusText").textContent = "Aucun activeMatch";
+    $("lockText").textContent = "Lock: —";
+    $("teamAName").textContent = "Équipe A";
+    $("teamBName").textContent = "Équipe B";
+    $("setsA").textContent = "0"; $("setsB").textContent = "0";
+    $("gamesA").textContent = "0"; $("gamesB").textContent = "0";
+    $("pointsA").textContent = "0"; $("pointsB").textContent = "0";
+    $("watchInfo").textContent = "Aucun match. Démarre un match pour activer la montre.";
     return;
   }
-  const d = snap.data() || {};
-  const inTb = (d.mode === "tiebreak") || (d.tiebreak && d.mode === "gamesets" && d.gamesA === 6 && d.gamesB === 6);
 
-  const lbl = (p) => inTb ? String(p||0) : ["0","15","30","40"][Math.min(3, p||0)];
+  $("statusText").textContent = `activeMatch: ${m.status || "?"}`;
+  $("lockText").textContent = `Lock: ${m.lockOwner ? "OK" : "NO"}`;
 
-  $("statusLine").textContent = `Status: ${d.status||"?"} • mode:${d.mode||"?"} • tb:${d.tiebreak}`;
-  $("scoreA").textContent = lbl(d.pointsA||0);
-  $("scoreB").textContent = lbl(d.pointsB||0);
-  $("setsGamesA").textContent = `Sets ${d.setsA||0} • Jeux ${d.gamesA||0}`;
-  $("setsGamesB").textContent = `Sets ${d.setsB||0} • Jeux ${d.gamesB||0}`;
+  const aNames = [m.a1Name, m.a2Name].filter(Boolean).join(" + ");
+  const bNames = [m.b1Name, m.b2Name].filter(Boolean).join(" + ");
+  $("teamAName").textContent = aNames || "Équipe A";
+  $("teamBName").textContent = bNames || "Équipe B";
+
+  $("setsA").textContent = String(m.setsA || 0);
+  $("setsB").textContent = String(m.setsB || 0);
+  $("gamesA").textContent = String(m.gamesA || 0);
+  $("gamesB").textContent = String(m.gamesB || 0);
+
+  const inTb = (m.mode === "tiebreak") || (m.tiebreak && (m.gamesA === 6 && m.gamesB === 6) && m.mode === "gamesets");
+  $("pointsA").textContent = fmtPoint(m.pointsA || 0, inTb);
+  $("pointsB").textContent = fmtPoint(m.pointsB || 0, inTb);
+
+  $("watchInfo").textContent = "Match LIVE créé dans Firestore. La montre peut scorer.";
 }
 
-async function start(){
-  setGroupId(GROUP_ID);
+function escapeHtml(s){
+  return String(s||"").replace(/[&<>"']/g, (m)=>({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[m]));
+}
+
+/* =========================
+   6) Listeners (players + activeMatch + actions)
+========================= */
+let unsubPlayers = null;
+let unsubActive = null;
+let unsubActions = null;
+
+function stopAllListeners(){
+  if (unsubPlayers) {unsubPlayers(); unsubPlayers=null;}
+  if (unsubActive)  {unsubActive();  unsubActive=null;}
+  if (unsubActions) {unsubActions(); unsubActions=null;}
+}
+
+async function boot(){
   await ensureAuth();
 
-  $("btnGroup").onclick = async () => {
-    setGroupId($("groupId").value);
-    location.reload();
-  };
+  // Players live
+  unsubPlayers = refPlayers().orderBy("createdAt","asc").onSnapshot((snap)=>{
+    playersCache = snap.docs.map(d => ({id:d.id, ...d.data()}));
+    renderPlayersSelects();
+    renderPlayersList();
+  });
 
-  $("btnStart").onclick = async () => {
-    await refActive().set({
-      status: "LIVE",
-      mode: "gamesets",
-      tiebreak: true,
-      bestOf: 3,
-      pointsA: 0, pointsB: 0,
-      gamesA: 0, gamesB: 0,
-      setsA: 0, setsB: 0,
-      undo: [],
-      createdAt: Date.now(),
-      updatedAt: Date.now()
-    }, { merge: true });
-    log("Match LIVE initialisé");
-  };
+  // activeMatch live
+  unsubActive = refActive().onSnapshot((snap)=>{
+    activeMatchCache = snap.exists ? snap.data() : null;
+    renderActive();
+    wireButtonsEnabled();
+  });
 
-  $("btnLive").onclick = () => refActive().update({ status: "LIVE", updatedAt: Date.now() });
-  $("btnDone").onclick = () => refActive().update({ status: "DONE", updatedAt: Date.now() });
-
-  refActive().onSnapshot(renderScore);
-
-  await startLockLoop();
-  startActionProcessor();
+  // IMPORTANT: moteur actions (Option 3)
+  // => on écoute /actions et on applique le score
+  unsubActions = refActions().orderBy("createdAt","asc").onSnapshot(async (snap)=>{
+    for (const change of snap.docChanges()){
+      if (change.type !== "added") continue;
+      const actionDoc = change.doc;
+      const a = actionDoc.data() || {};
+      try{
+        if (a.type === "POINT") await txAddPoint(a.team);
+        if (a.type === "UNDO")  await txUndo();
+        if (a.type === "FINISH") await txFinish();
+      } finally {
+        // on supprime l’action pour éviter re-traitement
+        await actionDoc.ref.delete().catch(()=>{});
+      }
+    }
+  });
 }
 
-start();
+/* =========================
+   7) Start / Stop match
+========================= */
+async function startMatch(){
+  const ids = {
+    a1: $("a1").value,
+    a2: $("a2").value,
+    b1: $("b1").value,
+    b2: $("b2").value,
+  };
+  const all = Object.values(ids).filter(Boolean);
+  const uniq = new Set(all);
+
+  if (all.length !== 4 || uniq.size !== 4){
+    $("hintStart").textContent = "⚠️ Choisis 4 joueurs différents (2 par équipe).";
+    return;
+  }
+
+  const byId = Object.fromEntries(playersCache.map(p => [p.id, p]));
+
+  const bestOf = parseInt($("bestOf").value,10);
+  const mode = $("mode").value;
+  const tiebreak = $("tiebreak").value === "true";
+  const server = $("server").value;
+
+  const payload = {
+    status: "LIVE",
+    mode,
+    tiebreak,
+    bestOf,
+    server,
+    pointsA: 0, pointsB: 0,
+    gamesA: 0, gamesB: 0,
+    setsA: 0, setsB: 0,
+    undo: [],
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+
+    a1Id: ids.a1, a2Id: ids.a2, b1Id: ids.b1, b2Id: ids.b2,
+    a1Name: byId[ids.a1]?.name || "",
+    a2Name: byId[ids.a2]?.name || "",
+    b1Name: byId[ids.b1]?.name || "",
+    b2Name: byId[ids.b2]?.name || "",
+
+    // lock simple (pour éviter 2 webapp en même temps)
+    lockOwner: auth.currentUser?.uid || "",
+    lockAt: Date.now(),
+  };
+
+  await refActive().set(payload, { merge:false });
+  $("hintStart").textContent = "✅ Match démarré !";
+}
+
+async function stopMatch(){
+  await refActive().delete().catch(()=>{});
+  $("hintStart").textContent = "Match supprimé (activeMatch effacé).";
+}
+
+/* =========================
+   8) Score logic (NO-AD)
+========================= */
+const setsToWin = (bestOf) => Math.floor((bestOf + 1) / 2);
+const isTbSet = (m) => (m.mode === "gamesets" && m.tiebreak && m.gamesA === 6 && m.gamesB === 6);
+
+async function txAddPoint(team){
+  if (team !== "A" && team !== "B") return;
+
+  await db.runTransaction(async (tx)=>{
+    const snap = await tx.get(refActive());
+    if (!snap.exists) return;
+    const m = snap.data();
+    if (m.status !== "LIVE") return;
+
+    // lock check : seul l’onglet "owner" traite
+    if (m.lockOwner && m.lockOwner !== auth.currentUser?.uid) return;
+
+    let pointsA = (m.pointsA||0), pointsB = (m.pointsB||0);
+    let gamesA = (m.gamesA||0), gamesB = (m.gamesB||0);
+    let setsA = (m.setsA||0), setsB = (m.setsB||0);
+    const undo = Array.isArray(m.undo) ? m.undo.slice(0) : [];
+    undo.push({ pointsA, pointsB, gamesA, gamesB, setsA, setsB });
+    while (undo.length > 50) undo.shift();
+
+    const bestOf = m.bestOf || 3;
+
+    function winSet(winnerA){
+      if (winnerA) setsA++; else setsB++;
+      gamesA = 0; gamesB = 0;
+      pointsA = 0; pointsB = 0;
+    }
+
+    function winGame(winnerA){
+      if (winnerA) gamesA++; else gamesB++;
+      pointsA = 0; pointsB = 0;
+
+      const diff = Math.abs(gamesA - gamesB);
+      const hasSet =
+        ((gamesA >= 6 || gamesB >= 6) && diff >= 2 && gamesA <= 7 && gamesB <= 7) ||
+        (gamesA === 7 || gamesB === 7);
+      if (hasSet) winSet(gamesA > gamesB);
+    }
+
+    if (m.mode === "tiebreak"){
+      if (team === "A") pointsA++; else pointsB++;
+      tx.update(refActive(), { pointsA, pointsB, updatedAt: Date.now(), undo });
+      return;
+    }
+
+    // tie-break à 6-6
+    if (isTbSet(m)){
+      if (team === "A") pointsA++; else pointsB++;
+      const lead = Math.abs(pointsA - pointsB);
+      if ((pointsA >= 7 || pointsB >= 7) && lead >= 2){
+        winSet(pointsA > pointsB);
+      }
+    } else {
+      // NO-AD : 0/15/30/40, à 40-40 -> point décisif
+      if (team === "A") pointsA++; else pointsB++;
+
+      if (pointsA >= 4 && pointsB <= 3) winGame(true);
+      else if (pointsB >= 4 && pointsA <= 3) winGame(false);
+      else if (pointsA === 4 && pointsB === 4) winGame(team === "A");
+    }
+
+    const finished = (setsA >= setsToWin(bestOf) || setsB >= setsToWin(bestOf));
+    tx.update(refActive(), {
+      pointsA, pointsB, gamesA, gamesB, setsA, setsB,
+      status: finished ? "DONE" : "LIVE",
+      updatedAt: Date.now(),
+      undo,
+      lockOwner: auth.currentUser?.uid || "",
+      lockAt: Date.now()
+    });
+  });
+}
+
+async function txUndo(){
+  await db.runTransaction(async (tx)=>{
+    const snap = await tx.get(refActive());
+    if (!snap.exists) return;
+    const m = snap.data();
+    if (m.status !== "LIVE") return;
+    if (m.lockOwner && m.lockOwner !== auth.currentUser?.uid) return;
+
+    const undo = Array.isArray(m.undo) ? m.undo.slice(0) : [];
+    if (!undo.length) return;
+    const prev = undo.pop();
+
+    tx.update(refActive(), {
+      pointsA: prev.pointsA, pointsB: prev.pointsB,
+      gamesA: prev.gamesA, gamesB: prev.gamesB,
+      setsA: prev.setsA, setsB: prev.setsB,
+      updatedAt: Date.now(),
+      undo
+    });
+  });
+}
+
+async function txFinish(){
+  await refActive().update({ status:"DONE", updatedAt: Date.now() });
+}
+
+async function archiveMatch(){
+  const snap = await refActive().get();
+  if (!snap.exists) return;
+  const m = snap.data();
+  const id = uid();
+  await refMatches().doc(id).set({
+    ...m,
+    archivedAt: Date.now(),
+    archiveId: id
+  });
+  await refActive().delete().catch(()=>{});
+}
+
+/* =========================
+   9) Players CRUD
+========================= */
+async function addPlayer(){
+  const name = $("playerName").value.trim();
+  const level = parseInt($("playerLevel").value,10);
+  if (!name) return;
+
+  await refPlayers().add({ name, level, createdAt: Date.now() });
+  $("playerName").value = "";
+}
+
+/* =========================
+   10) History render
+========================= */
+let unsubHistory = null;
+function listenHistory(){
+  if (unsubHistory) {unsubHistory(); unsubHistory=null;}
+  unsubHistory = refMatches().orderBy("archivedAt","desc").limit(30).onSnapshot((snap)=>{
+    const box = $("historyList");
+    if (snap.empty){
+      box.innerHTML = `<div class="muted">Aucun match archivé</div>`;
+      return;
+    }
+    box.innerHTML = snap.docs.map(d=>{
+      const m = d.data();
+      const a = [m.a1Name,m.a2Name].filter(Boolean).join(" + ");
+      const b = [m.b1Name,m.b2Name].filter(Boolean).join(" + ");
+      return `
+        <div class="item">
+          <div>
+            <b>${escapeHtml(a)}</b> vs <b>${escapeHtml(b)}</b>
+            <div class="muted">Score final: ${m.setsA||0}-${m.setsB||0} (jeux ${m.gamesA||0}-${m.gamesB||0})</div>
+          </div>
+          <div class="muted">${new Date(m.archivedAt||0).toLocaleString()}</div>
+        </div>
+      `;
+    }).join("");
+  });
+}
+
+/* =========================
+   11) Buttons enable
+========================= */
+function wireButtonsEnabled(){
+  const live = activeMatchCache?.status === "LIVE";
+  $("btnPointA").disabled = !live;
+  $("btnPointB").disabled = !live;
+  $("btnUndo").disabled = !live;
+  $("btnFinish").disabled = !activeMatchCache;
+  $("btnArchive").disabled = !activeMatchCache;
+}
+
+/* =========================
+   12) UI wiring
+========================= */
+function sendWatchAction(type, team=null){
+  // optionnel: si tu veux piloter depuis web comme la montre
+  return refActions().add({ type, team, source:"web", createdAt: Date.now() });
+}
+
+function init(){
+  // tabs
+  document.querySelectorAll(".tab").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      setTab(btn.dataset.view);
+      if (btn.dataset.view === "history") listenHistory();
+    });
+  });
+
+  // group id
+  $("groupId").value = GROUP_ID;
+  $("groupId").addEventListener("change", (e)=>setGroupId(e.target.value));
+
+  // match
+  $("btnStart").addEventListener("click", startMatch);
+  $("btnStop").addEventListener("click", stopMatch);
+
+  // points (web direct)
+  $("btnPointA").addEventListener("click", ()=>txAddPoint("A"));
+  $("btnPointB").addEventListener("click", ()=>txAddPoint("B"));
+
+  $("btnUndo").addEventListener("click", txUndo);
+  $("btnFinish").addEventListener("click", txFinish);
+  $("btnArchive").addEventListener("click", archiveMatch);
+
+  // players
+  $("btnAddPlayer").addEventListener("click", addPlayer);
+
+  boot();
+}
+
+// start
+document.addEventListener("DOMContentLoaded", init);
