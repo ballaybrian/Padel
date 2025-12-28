@@ -1,52 +1,3 @@
-
-/* ---------- V3 navigation (fix Android/PC: ancien cache + boutons inactifs) ---------- */
-(function(){
-  const viewMap = { home:'view-home', score:'view-score', players:'view-players', history:'view-history' };
-
-  function setActiveView(key){
-    const id = viewMap[key] || viewMap.home;
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    const el = document.getElementById(id);
-    if (el) el.classList.add('active');
-  }
-
-  // global (si jamais tu as encore des onclick="goTo('score')")
-  window.goTo = function(target){
-    const key = String(target||'home').split('#')[0] || 'home';
-    location.hash = key;
-    setActiveView(key);
-  };
-
-  function initNav(){
-    document.addEventListener('click', (e) => {
-      const btn = e.target.closest('[data-goto]');
-      if(!btn) return;
-      const raw = btn.getAttribute('data-goto') || 'home';
-      const [key, anchor] = raw.split('#');
-      const k = key || 'home';
-      location.hash = k;
-      setActiveView(k);
-
-      if(anchor){
-        const a = document.getElementById(anchor);
-        if(a) a.scrollIntoView({behavior:'smooth', block:'start'});
-      }
-    });
-
-    const first = (location.hash || '#home').replace('#','') || 'home';
-    setActiveView(first);
-
-    window.addEventListener('hashchange', () => {
-      const k = (location.hash || '#home').replace('#','') || 'home';
-      setActiveView(k);
-    });
-  }
-
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initNav);
-  else initNav();
-})();
-
-
 /* =========================================================
    PADEL WEB APP — Firestore (Cloud) + NO-AD
    - players: groups/{groupId}/players
@@ -140,6 +91,30 @@ function renderPlayersList(){
     btn.addEventListener("click", async () => {
       await refPlayers().doc(btn.dataset.del).delete();
     });
+  });
+}
+
+function renderRanking(){
+  const root = $("rankingList");
+  if (!root) return;
+  root.innerHTML = "";
+
+  const rows = [...playersCache]
+    .sort((a,b)=> (b.rating||0) - (a.rating||0) || (a.name||"").localeCompare(b.name||""));
+
+  if (rows.length === 0){
+    root.innerHTML = `<div class="muted">Aucun joueur pour l'instant.</div>`;
+    return;
+  }
+
+  rows.forEach((p, idx)=>{
+    const div = document.createElement("div");
+    div.className = "playerRow";
+    div.innerHTML = `
+      <div class="playerName">${idx+1}. ${escapeHtml(p.name||"-")}</div>
+      <div class="playerMeta">N${escapeHtml(String(p.rating||""))}</div>
+    `;
+    root.appendChild(div);
   });
 }
 
@@ -429,6 +404,7 @@ async function boot(){
     playersCache = snap.docs.map(d => ({ id:d.id, ...d.data() }));
     renderPlayersSelects();
     renderPlayersList();
+    renderRanking();
   });
 
   // activeMatch subscription

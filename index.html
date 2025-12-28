@@ -12,7 +12,7 @@
 
   <link rel="stylesheet" href="styles.css?v=3" />
 </head>
-<body> 
+<body>
   <main class="container">
     <section id="view-home" class="view active">
       <div class="home-wrap">
@@ -25,7 +25,7 @@
         <div class="home-actions">
           <button class="btn btn-primary" data-goto="score">Nouveau match</button>
           <button class="btn" data-goto="players">Ajout joueur</button>
-          <button class="btn" data-goto="score#classement">Classement</button>
+          <button class="btn" data-goto="ranking">Classement</button>
           <button class="btn" data-goto="history">Historique</button>
         </div>
 
@@ -34,6 +34,7 @@
     </section>
 
     <section class="view" id="view-score">
+      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
 <h1>Compteur de match (2 vs 2)</h1>
 <div class="card">
 <h2>Cloud (Firebase)</h2>
@@ -154,8 +155,17 @@
 <div class="okline muted" id="watchInfo">—</div>
 </div>
 </section>
+
+    <section class="view" id="view-ranking">
+      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
+      <h1>Classement</h1>
+      <div class="card">
+        <div id="rankingList" class="list"></div>
+      </div>
+    </section>
     <section class="view hidden" id="view-players">
-<h1>Joueurs</h1>
+      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
+      <h1>Joueurs</h1>
 <div class="card">
 <h2>Ajouter un joueur</h2>
 <div class="grid2">
@@ -180,7 +190,8 @@
 </div>
 </section>
     <section class="view hidden" id="view-history">
-<h1>Historique</h1>
+      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
+      <h1>Historique</h1>
 <div class="card">
 <h2>Matchs archivés</h2>
 <div class="list" id="historyList"></div>
