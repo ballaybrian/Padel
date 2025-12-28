@@ -1,3 +1,52 @@
+
+/* ---------- V3 navigation (fix Android/PC: ancien cache + boutons inactifs) ---------- */
+(function(){
+  const viewMap = { home:'view-home', score:'view-score', players:'view-players', history:'view-history' };
+
+  function setActiveView(key){
+    const id = viewMap[key] || viewMap.home;
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    const el = document.getElementById(id);
+    if (el) el.classList.add('active');
+  }
+
+  // global (si jamais tu as encore des onclick="goTo('score')")
+  window.goTo = function(target){
+    const key = String(target||'home').split('#')[0] || 'home';
+    location.hash = key;
+    setActiveView(key);
+  };
+
+  function initNav(){
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-goto]');
+      if(!btn) return;
+      const raw = btn.getAttribute('data-goto') || 'home';
+      const [key, anchor] = raw.split('#');
+      const k = key || 'home';
+      location.hash = k;
+      setActiveView(k);
+
+      if(anchor){
+        const a = document.getElementById(anchor);
+        if(a) a.scrollIntoView({behavior:'smooth', block:'start'});
+      }
+    });
+
+    const first = (location.hash || '#home').replace('#','') || 'home';
+    setActiveView(first);
+
+    window.addEventListener('hashchange', () => {
+      const k = (location.hash || '#home').replace('#','') || 'home';
+      setActiveView(k);
+    });
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initNav);
+  else initNav();
+})();
+
+
 /* =========================================================
    PADEL WEB APP — Firestore (Cloud) + NO-AD
    - players: groups/{groupId}/players
@@ -406,13 +455,3 @@ async function boot(){
 }
 
 document.addEventListener("DOMContentLoaded", boot);
-
-
-// PWA: Service Worker (cache offline)
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch((err) => {
-      console.warn('SW registration failed', err);
-    });
-  });
-}

@@ -213,3 +213,16 @@ button.ghost{
 @media (max-width:900px){
   .grid2,.scoreGrid{grid-template-columns:1fr}
 }
+
+
+/* --- V3 routing helpers --- */
+.view{display:none;}
+.view.active{display:block;}
+/* Home screen */
+.home-wrap{min-height:70vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;text-align:center;}
+.logoMark{width:96px;height:96px;display:grid;place-items:center;margin-bottom:6px;}
+.logoMark img{width:96px;height:96px;}
+.home-title{letter-spacing:0.12em;font-weight:800;}
+.home-sub{opacity:.8;margin-top:-10px;}
+.home-actions{width:min(520px,92vw);display:grid;gap:12px;}
+main{width:100%;}
