@@ -2,212 +2,242 @@
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>PADEL</title>
 
-  <link rel="manifest" href="manifest.webmanifest?v=3">
-  <meta name="theme-color" content="#0b0d0d">
-  <link rel="icon" href="icons/icon-192.png">
-  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <meta name="theme-color" content="#101211" />
+  <link rel="manifest" href="manifest.json?v=4" />
+  <link rel="icon" type="image/png" sizes="32x32" href="assets/icons/favicon-32.png" />
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png" />
 
-  <link rel="stylesheet" href="styles.css?v=3" />
+  <link rel="stylesheet" href="styles.css?v=4" />
 </head>
 <body>
-  <main class="container">
-    <section id="view-home" class="view active">
-      <div class="home-wrap">
-        <div class="logoMark">
-          <img src="icons/icon-512.png" alt="Logo Padel">
-        </div>
-        <h1 class="home-title">PADEL</h1>
-        <div class="home-sub">Score • Historique • Joueurs</div>
-
-        <div class="home-actions">
-          <button class="btn btn-primary" data-goto="score">Nouveau match</button>
-          <button class="btn" data-goto="players">Ajout joueur</button>
-          <button class="btn" data-goto="ranking">Classement</button>
-          <button class="btn" data-goto="history">Historique</button>
-        </div>
-
-        <div class="hint"><span class="dot"></span> Fond anthracite • Boutons vert tennis</div>
+  <!-- HOME -->
+  <main id="view-home" class="view view--active">
+    <div class="home">
+      <div class="logoWrap" aria-label="Logo Padel">
+        <img src="assets/icons/icon-192.png" class="logo" alt="Padel" />
       </div>
-    </section>
 
-    <section class="view" id="view-score">
-      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
-<h1>Compteur de match (2 vs 2)</h1>
-<div class="card">
-<h2>Cloud (Firebase)</h2>
-<div class="grid2">
-<label>
-            Group ID (même pour téléphone + montre)
-            <input id="groupId" placeholder="club1" type="text"/>
-</label>
-<div class="statusBox">
-<div class="small">Statut</div>
-<div class="statusText" id="statusText">…</div>
-<div class="small muted" id="lockText">Lock: …</div>
-</div>
-</div>
-<p class="muted">Mets <b>club1</b> si tu es seul. La montre doit utiliser le même Group ID.</p>
-</div>
-<div class="card">
-<h2>Choix des joueurs</h2>
-<div class="grid2">
-<div>
-<h3>Équipe A</h3>
-<label>Joueur A1
-              <select id="a1"></select>
-</label>
-<label>Joueur A2
-              <select id="a2"></select>
-</label>
-</div>
-<div>
-<h3>Équipe B</h3>
-<label>Joueur B1
-              <select id="b1"></select>
-</label>
-<label>Joueur B2
-              <select id="b2"></select>
-</label>
-</div>
-</div>
-<div class="grid2">
-<label>Sets gagnants
-            <select id="bestOf">
-<option value="3">2 sets gagnants (Best of 3)</option>
-<option value="5">3 sets gagnants (Best of 5)</option>
-</select>
-</label>
-<label>Jeu décisif (tie-break à 6-6)
-            <select id="tiebreak">
-<option value="true">Oui</option>
-<option value="false">Non</option>
-</select>
-</label>
-<label>Mode
-            <select id="mode">
-<option value="gamesets">Jeux + sets (NO-AD)</option>
-<option value="tiebreak">Tie-break only</option>
-</select>
-</label>
-<label>Service (info)
-            <select id="server">
-<option value="A">Équipe A</option>
-<option value="B">Équipe B</option>
-</select>
-</label>
-</div>
-<div class="actionsRow">
-<button class="primary" id="btnStart">Démarrer match (Cloud)</button>
-<button class="danger" id="btnStop">Arrêter (effacer activeMatch)</button>
-</div>
-<p class="muted" id="hintStart">Choisis 4 joueurs (2 par équipe).</p>
-</div>
-<div class="card">
-<h2>Score (LIVE depuis Firestore)</h2>
-<div class="scoreGrid">
-<div class="teamCard">
-<div class="teamName" id="teamAName">Équipe A</div>
-<div class="bigNums">
-<div>
-<div class="small muted">sets</div>
-<div class="num" id="setsA">0</div>
-</div>
-<div>
-<div class="small muted">jeux</div>
-<div class="num" id="gamesA">0</div>
-</div>
-</div>
-<div class="pointsLine">
-<div class="pointsLabel">points</div>
-<div class="points" id="pointsA">0</div>
-</div>
-<button class="primary" id="btnPointA">+1 point (A)</button>
-</div>
-<div class="teamCard">
-<div class="teamName" id="teamBName">Équipe B</div>
-<div class="bigNums">
-<div>
-<div class="small muted">sets</div>
-<div class="num" id="setsB">0</div>
-</div>
-<div>
-<div class="small muted">jeux</div>
-<div class="num" id="gamesB">0</div>
-</div>
-</div>
-<div class="pointsLine">
-<div class="pointsLabel">points</div>
-<div class="points" id="pointsB">0</div>
-</div>
-<button class="primary" id="btnPointB">+1 point (B)</button>
-</div>
-</div>
-<div class="actionsRow">
-<button class="ghost" id="btnUndo">Annuler dernier point</button>
-<button class="ghost" id="btnFinish">Terminer (DONE)</button>
-</div>
-<div class="actionsRow">
-<button class="ghost" id="btnArchive">Archiver dans l’historique</button>
-</div>
-<div class="okline muted" id="watchInfo">—</div>
-</div>
-</section>
+      <h1 class="title">PADEL</h1>
+      <div class="subtitle">Nouveau match • Classement • Historique • Joueurs</div>
 
-    <section class="view" id="view-ranking">
-      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
-      <h1>Classement</h1>
-      <div class="card">
-        <div id="rankingList" class="list"></div>
+      <div class="homeButtons">
+        <button class="btn btn--primary" data-goto="match">Nouveau match</button>
+        <button class="btn" data-goto="ranking">Classement</button>
+        <button class="btn" data-goto="history">Historique</button>
+        <button class="btn" data-goto="players">Ajout joueur</button>
       </div>
-    </section>
-    <section class="view hidden" id="view-players">
-      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
-      <h1>Joueurs</h1>
-<div class="card">
-<h2>Ajouter un joueur</h2>
-<div class="grid2">
-<label>Nom
-            <input id="playerName" placeholder="Ex: Brian Dupont"/>
-</label>
-<label>Niveau
-            <select id="playerLevel">
-<option value="1">N1</option>
-<option value="2">N2</option>
-<option value="3">N3</option>
-<option selected="" value="4">N4</option>
-<option value="5">N5</option>
-</select>
-</label>
-</div>
-<button class="primary" id="btnAddPlayer">Ajouter</button>
-</div>
-<div class="card">
-<h2>Liste des joueurs</h2>
-<div class="list" id="playersList"></div>
-</div>
-</section>
-    <section class="view hidden" id="view-history">
-      <div class="viewTop"><button class="backBtn" data-goto="home">← Accueil</button></div>
-      <h1>Historique</h1>
-<div class="card">
-<h2>Matchs archivés</h2>
-<div class="list" id="historyList"></div>
-</div>
-</section>
+
+      <div class="footerHint"><span class="dot"></span> Fond anthracite • Boutons vert tennis</div>
+    </div>
+
+    <footer class="footer">PADEL • GitHub Pages • Firestore</footer>
   </main>
 
-  <footer class="footer">
-    PADEL • GitHub Pages • Firestore
-  </footer>
+  <!-- MATCH -->
+  <main id="view-match" class="view">
+    <header class="topbar">
+      <button class="iconBtn" id="back-match" title="Retour">←</button>
+      <div class="topbarTitle">Nouveau match</div>
+      <div class="topbarRight"></div>
+    </header>
 
-  <script src="app.js?v=3"></script>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./sw.js?v=3');
-    }
-  </script>
+    <div class="container">
+      <section class="card">
+        <h2>Cloud (Firebase)</h2>
+        <div class="grid2">
+          <label>
+            <span>Group ID (même pour téléphone + montre)</span>
+            <input id="groupId" value="club1" />
+          </label>
+          <label>
+            <span>Statut</span>
+            <input id="status" value="…" disabled />
+          </label>
+        </div>
+        <p class="muted">Mets <b>club1</b> si tu es seul. La montre doit utiliser le même Group ID.</p>
+      </section>
+
+      <section class="card">
+        <h2>Choix des joueurs</h2>
+
+        <div class="grid2">
+          <div class="subcard">
+            <h3>Équipe A</h3>
+            <label>
+              <span>Joueur A1</span>
+              <select id="pA1"></select>
+            </label>
+            <label>
+              <span>Joueur A2</span>
+              <select id="pA2"></select>
+            </label>
+          </div>
+
+          <div class="subcard">
+            <h3>Équipe B</h3>
+            <label>
+              <span>Joueur B1</span>
+              <select id="pB1"></select>
+            </label>
+            <label>
+              <span>Joueur B2</span>
+              <select id="pB2"></select>
+            </label>
+          </div>
+        </div>
+
+        <div class="grid2">
+          <label>
+            <span>Sets gagnants</span>
+            <select id="bestOf">
+              <option value="3" selected>2 sets gagnants (Best of 3)</option>
+              <option value="5">3 sets gagnants (Best of 5)</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Jeu décisif (tie-break à 6-6)</span>
+            <select id="tiebreak">
+              <option value="true" selected>Oui</option>
+              <option value="false">Non</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Mode</span>
+            <select id="mode">
+              <option value="gamesets" selected>Jeux + sets (NO-AD)</option>
+              <option value="tiebreak">Tie-break uniquement</option>
+            </select>
+          </label>
+
+          <label>
+            <span>Service</span>
+            <select id="serve">
+              <option value="A" selected>Équipe A</option>
+              <option value="B">Équipe B</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="actionsRow">
+          <button class="btn btn--primary" id="btnStart">Démarrer match (Cloud)</button>
+          <button class="btn btn--danger" id="btnStop">Arrêter (effacer activeMatch)</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Score (LIVE depuis Firestore)</h2>
+        <div class="scoreGrid">
+          <div class="scoreCard">
+            <div class="scoreHead">
+              <div id="teamAName" class="teamName">Équipe A</div>
+              <div id="badgeServeA" class="badge" hidden>SERVICE</div>
+            </div>
+            <div class="scoreLine">
+              <div class="scoreBig" id="setsA">0</div><div class="scoreSmall">sets</div>
+              <div class="scoreBig" id="gamesA">0</div><div class="scoreSmall">jeux</div>
+            </div>
+            <div class="points" id="pointsA">0</div>
+            <button class="btn btn--small" id="btnPointA">+1 point (A)</button>
+          </div>
+
+          <div class="scoreCard">
+            <div class="scoreHead">
+              <div id="teamBName" class="teamName">Équipe B</div>
+              <div id="badgeServeB" class="badge" hidden>SERVICE</div>
+            </div>
+            <div class="scoreLine">
+              <div class="scoreBig" id="setsB">0</div><div class="scoreSmall">sets</div>
+              <div class="scoreBig" id="gamesB">0</div><div class="scoreSmall">jeux</div>
+            </div>
+            <div class="points" id="pointsB">0</div>
+            <button class="btn btn--small" id="btnPointB">+1 point (B)</button>
+          </div>
+        </div>
+
+        <div class="actionsRow">
+          <button class="btn btn--small" id="btnUndo">Annuler dernier point</button>
+          <button class="btn btn--small" id="btnDone">Terminer (DONE)</button>
+          <button class="btn btn--ghost btn--small" id="btnArchive">Archiver dans l'historique</button>
+        </div>
+
+        <p class="muted" id="liveHint">Match LIVE créé dans Firestore. La montre peut scorer.</p>
+      </section>
+    </div>
+  </main>
+
+  <!-- PLAYERS -->
+  <main id="view-players" class="view">
+    <header class="topbar">
+      <button class="iconBtn" id="back-players" title="Retour">←</button>
+      <div class="topbarTitle">Ajout joueur</div>
+      <div class="topbarRight"></div>
+    </header>
+
+    <div class="container">
+      <section class="card">
+        <h2>Nouveau joueur</h2>
+        <div class="grid2">
+          <label>
+            <span>Nom & prénom</span>
+            <input id="newPlayerName" placeholder="Ex: Alex Martin" />
+          </label>
+          <label>
+            <span>Niveau (optionnel)</span>
+            <input id="newPlayerRank" placeholder="Ex: N3" />
+          </label>
+        </div>
+        <div class="actionsRow">
+          <button class="btn btn--primary" id="btnAddPlayer">Ajouter</button>
+          <button class="btn btn--small" id="btnReloadPlayers">Recharger la liste</button>
+        </div>
+        <p class="muted" id="addPlayerMsg"></p>
+      </section>
+
+      <section class="card">
+        <h2>Joueurs (club)</h2>
+        <div id="playersList" class="list"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- RANKING -->
+  <main id="view-ranking" class="view">
+    <header class="topbar">
+      <button class="iconBtn" id="back-ranking" title="Retour">←</button>
+      <div class="topbarTitle">Classement</div>
+      <div class="topbarRight"></div>
+    </header>
+
+    <div class="container">
+      <section class="card">
+        <h2>Classement</h2>
+        <p class="muted">Simple : basé sur les matchs archivés. (Tu pourras améliorer plus tard.)</p>
+        <div id="rankingTable" class="list"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- HISTORY -->
+  <main id="view-history" class="view">
+    <header class="topbar">
+      <button class="iconBtn" id="back-history" title="Retour">←</button>
+      <div class="topbarTitle">Historique</div>
+      <div class="topbarRight"></div>
+    </header>
+
+    <div class="container">
+      <section class="card">
+        <h2>Historique</h2>
+        <div id="historyList" class="list"></div>
+      </section>
+    </div>
+  </main>
+
+  <script type="module" src="app.js?v=4"></script>
 </body>
 </html>

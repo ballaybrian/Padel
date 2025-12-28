@@ -1,233 +1,193 @@
 :root{
-  --bg:#111214;             /* anthracite */
-  --card:#17181b;
-  --card2:#141518;
-  --txt:#e8e8e8;
-  --muted:#a7a7a7;
-  --primary:#2ecc71;        /* vert tennis */
-  --primary2:#1fbf62;
-  --danger:#ff4b6e;
-  --ghost:#2a2b2f;
-  --border:#2a2b2f;
+  --bg:#101211;
+  --card:#171a19;
+  --card2:#1c201f;
+  --stroke:rgba(255,255,255,.10);
+  --text:#f1f3f2;
+  --muted:rgba(241,243,242,.70);
+  --green:#2CE07A;
+  --green2:#20c86a;
+  --danger:#d14b4b;
+  --shadow: 0 18px 60px rgba(0,0,0,.55);
+  --radius:18px;
 }
-
 *{box-sizing:border-box}
 html,body{height:100%}
 body{
   margin:0;
-  font-family:system-ui,Segoe UI,Roboto,Arial;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji","Segoe UI Emoji";
+  color:var(--text);
   background:
-    radial-gradient(900px 520px at 20% 0%, rgba(46,204,113,.12), transparent),
-    radial-gradient(900px 520px at 80% 0%, rgba(46,204,113,.08), transparent),
-    var(--bg);
-  color:var(--txt);
+    radial-gradient(1000px 650px at 50% 15%, rgba(44,224,122,.18), transparent 55%),
+    radial-gradient(900px 600px at 25% 10%, rgba(44,224,122,.10), transparent 60%),
+    linear-gradient(#0d0f0e, var(--bg));
 }
+.view{display:none; min-height:100vh}
+.view--active{display:block}
 
-.container{
-  max-width:980px;
-  margin:0 auto;
-  padding:18px 14px 0;
-}
-
-h1{margin:0 0 12px 0; font-size:22px; letter-spacing:.2px}
-h2{margin:0 0 10px 0; font-size:16px}
-h3{margin:8px 0; font-size:13px; color:var(--muted); font-weight:700}
-.small{font-size:12px}
-.muted{color:var(--muted)}
-
-.view.hidden{display:none}
-
-.card{
-  background:linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.01));
-  border:1px solid rgba(255,255,255,.08);
-  border-radius:18px;
-  padding:14px;
-  margin:12px 0;
-  box-shadow: 0 10px 30px rgba(0,0,0,.25);
-}
-
-.grid2{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap:12px;
-}
-
-label{display:flex; flex-direction:column; gap:6px; font-size:13px; color:var(--muted)}
-input,select{
-  background:var(--card2);
-  border:1px solid rgba(255,255,255,.10);
-  color:var(--txt);
-  padding:10px 10px;
-  border-radius:14px;
-  outline:none;
-}
-
-button{
-  border:1px solid rgba(255,255,255,.10);
-  background:var(--ghost);
-  color:var(--txt);
-  padding:11px 12px;
-  border-radius:14px;
-  cursor:pointer;
-  font-weight:800;
-  letter-spacing:.2px;
-}
-button:hover{filter:brightness(1.05)}
-button:active{transform:translateY(1px)}
-button:disabled{opacity:.45; cursor:not-allowed; transform:none}
-
-button.primary{
-  background:linear-gradient(180deg, var(--primary), var(--primary2));
-  border-color:rgba(0,0,0,.0);
-  color:#0b0e14;
-}
-button.danger{
-  background:transparent;
-  border-color:rgba(255,75,110,.6);
-  color:#ff8ea2;
-}
-button.ghost{
-  background:transparent;
-  border-color:rgba(255,255,255,.10);
-}
-
-.actionsRow{display:flex; gap:10px; flex-wrap:wrap; margin-top:10px}
-
-.statusBox{
-  background:var(--card2);
-  border:1px solid rgba(255,255,255,.10);
-  border-radius:14px;
-  padding:10px;
-}
-.statusText{font-size:14px; font-weight:900; margin-top:6px}
-
-.scoreGrid{
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:12px;
-}
-.teamCard{
-  background:var(--card2);
-  border:1px solid rgba(255,255,255,.10);
-  border-radius:18px;
-  padding:12px;
-}
-.teamName{font-weight:900; margin-bottom:6px}
-.bigNums{display:flex; gap:16px}
-.num{font-size:30px; font-weight:900}
-.pointsLine{display:flex; align-items:flex-end; justify-content:space-between; margin:10px 0 10px}
-.pointsLabel{color:var(--muted); font-size:12px}
-.points{font-size:28px; font-weight:1000}
-.okline{margin-top:10px}
-
-.list{display:flex; flex-direction:column; gap:10px}
-.item{
-  display:flex; justify-content:space-between; align-items:center;
-  background:var(--card2);
-  border:1px solid rgba(255,255,255,.10);
-  border-radius:16px;
-  padding:10px 12px;
-}
-
-/* Subbar (retour) */
-.subbar{
+.home{
+  min-height: calc(100vh - 58px);
   display:flex;
-  align-items:center;
-  gap:12px;
-  margin:0 0 10px 0;
-}
-.backBtn{
-  padding:10px 12px;
-  border-radius:999px;
-}
-.subbarTitle{
-  font-weight:900;
-  color:var(--muted);
-  letter-spacing:.3px;
-}
-
-/* HOME */
-.homeView{
-  min-height: calc(100vh - 90px);
-  display:flex;
+  flex-direction:column;
   align-items:center;
   justify-content:center;
-}
-.homeCenter{
+  padding: 28px 16px 16px;
+  gap:10px;
   text-align:center;
-  width:min(360px, 92vw);
 }
 .logoWrap{
-  display:flex;
-  justify-content:center;
-  margin-bottom:16px;
+  width:86px;height:86px;
+  display:grid;place-items:center;
+  border-radius:24px;
+  background: rgba(0,0,0,.25);
+  box-shadow: var(--shadow);
+  border:1px solid var(--stroke);
 }
-.logoIcon{
-  width:120px;
-  height:120px;
-  filter: drop-shadow(0 14px 22px rgba(0,0,0,.35));
+.logo{width:68px;height:68px; border-radius:18px}
+.title{
+  margin:0;
+  letter-spacing:.22em;
+  font-weight:800;
+  font-size:28px;
 }
-.homeLogo{
-  font-size:44px;
-  font-weight:1000;
-  letter-spacing:6px;
-  margin-bottom:4px;
-}
-.homeSub{
-  color:var(--muted);
-  margin-bottom:22px;
-  font-weight:700;
-}
-.homeButtons{
-  display:grid;
-  grid-template-columns:1fr;
-  gap:14px;
-}
-.homeBtn{
-  padding:16px 14px;
-  border-radius:18px;
-  font-size:16px;
-}
-.homeHint{
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  align-items:center;
-  margin-top:16px;
-  color:var(--muted);
-  font-size:12px;
-  font-weight:700;
-}
-.dot{
-  width:8px;height:8px;border-radius:999px;
-  background:var(--primary);
-  box-shadow: 0 0 0 6px rgba(46,204,113,.10);
-}
-
+.subtitle{color:var(--muted); font-size:13px}
+.homeButtons{width:min(520px, 92vw); display:grid; gap:12px; margin-top:18px}
+.footerHint{margin-top:8px; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:8px}
+.dot{width:10px;height:10px;border-radius:99px;background:rgba(44,224,122,.25); border:1px solid rgba(44,224,122,.8)}
 .footer{
-  padding:18px 14px;
-  text-align:center;
-  margin-top:12px;
-}
-
-@media (max-width:900px){
-  .grid2,.scoreGrid{grid-template-columns:1fr}
-}
-
-/* --- Top bar inside views (Back button) --- */
-.viewTop{
+  height:58px;
   display:flex;
   align-items:center;
-  gap:10px;
-  margin-bottom:12px;
+  justify-content:center;
+  font-size:12px;
+  color:rgba(241,243,242,.55);
 }
 
-.backBtn{
-  border:1px solid rgba(255,255,255,0.12);
-  background:rgba(255,255,255,0.06);
-  color:rgba(255,255,255,0.9);
-  padding:8px 12px;
-  border-radius:999px;
-  cursor:pointer;
+.container{width:min(980px, 96vw); margin: 18px auto 48px; display:grid; gap:14px}
+.card{
+  background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.04));
+  border:1px solid var(--stroke);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
 }
-.backBtn:hover{background:rgba(255,255,255,0.10)}
+.card h2{margin:0 0 10px; font-size:16px}
+.subcard{
+  background: rgba(0,0,0,.18);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  padding: 12px;
+}
+.subcard h3{margin:0 0 10px; font-size:14px; color:rgba(241,243,242,.9)}
+.muted{margin:10px 0 0; color:var(--muted); font-size:12px}
+.grid2{
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:12px;
+}
+@media (max-width: 720px){
+  .grid2{grid-template-columns:1fr}
+}
+
+label{display:grid; gap:6px}
+label span{font-size:12px; color:rgba(241,243,242,.78)}
+input, select{
+  width:100%;
+  padding: 12px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--stroke);
+  background: rgba(0,0,0,.22);
+  color: var(--text);
+  outline:none;
+}
+input:focus, select:focus{border-color: rgba(44,224,122,.7); box-shadow: 0 0 0 3px rgba(44,224,122,.12)}
+
+.btn{
+  width:100%;
+  padding: 14px 14px;
+  border-radius: 16px;
+  border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.08);
+  color: var(--text);
+  font-weight: 700;
+  letter-spacing: .02em;
+  cursor: pointer;
+  transition: transform .06s ease, background .15s ease, border-color .15s ease;
+}
+.btn:hover{transform: translateY(-1px); background: rgba(255,255,255,.10)}
+.btn:active{transform: translateY(0px)}
+.btn--primary{
+  background: rgba(44,224,122,.16);
+  border-color: rgba(44,224,122,.55);
+}
+.btn--primary:hover{background: rgba(44,224,122,.22)}
+.btn--danger{
+  background: rgba(209,75,75,.18);
+  border-color: rgba(209,75,75,.55);
+}
+.btn--small{padding: 10px 12px; border-radius: 14px; font-weight:700}
+.btn--ghost{background: transparent}
+.actionsRow{display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap:10px; margin-top:12px}
+@media (max-width: 720px){
+  .actionsRow{grid-template-columns:1fr}
+}
+
+.topbar{
+  position: sticky;
+  top:0;
+  z-index:20;
+  display:grid;
+  grid-template-columns: 56px 1fr 56px;
+  align-items:center;
+  height:56px;
+  padding: 0 10px;
+  background: rgba(16,18,17,.85);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(255,255,255,.08);
+}
+.topbarTitle{font-weight:800; letter-spacing:.08em; text-align:center}
+.iconBtn{
+  height:40px; width:40px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  color: var(--text);
+  cursor:pointer;
+  font-size:18px;
+}
+.iconBtn:hover{background: rgba(255,255,255,.09)}
+.iconBtn:active{transform: translateY(1px)}
+
+.scoreGrid{display:grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap:12px; margin-top:10px}
+@media (max-width: 720px){ .scoreGrid{grid-template-columns:1fr} }
+.scoreCard{background: rgba(0,0,0,.18); border: 1px solid var(--stroke); border-radius: 16px; padding: 12px}
+.scoreHead{display:flex; align-items:center; justify-content:space-between; gap:8px}
+.teamName{font-weight:800; font-size:14px}
+.badge{
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(44,224,122,.18);
+  border: 1px solid rgba(44,224,122,.55);
+  color: rgba(241,243,242,.95);
+  font-size:11px;
+  font-weight:800;
+}
+.scoreLine{display:grid; grid-template-columns:auto auto auto auto; gap:6px; align-items:baseline; margin-top:8px}
+.scoreBig{font-size:26px; font-weight:900}
+.scoreSmall{font-size:12px; color:var(--muted); margin-right:10px}
+.points{font-size:34px; font-weight:900; margin: 10px 0}
+
+.list{display:grid; gap:10px}
+.listItem{
+  background: rgba(0,0,0,.18);
+  border: 1px solid var(--stroke);
+  border-radius: 16px;
+  padding: 12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.listLeft{display:grid; gap:2px}
+.listTitle{font-weight:800}
+.listSub{font-size:12px; color:var(--muted)}
