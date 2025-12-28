@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>PADEL — Web App</title>
+  <title>PADEL</title>
   <link rel="stylesheet" href="styles.css" />
 
   <!-- Firebase (compat CDN) -->
@@ -15,19 +15,71 @@
 </head>
 
 <body>
-  <header class="topbar">
-    <div class="brand">🎾 <b>PADEL</b></div>
-    <nav class="tabs">
-      <button class="tab active" data-view="score">Score</button>
-      <button class="tab" data-view="players">Joueurs</button>
-      <button class="tab" data-view="history">Historique</button>
-    </nav>
-  </header>
-
   <main class="container">
 
+    <!-- HOME -->
+    <section id="view-home" class="view homeView">
+      <div class="homeCenter">
+
+        <!-- Logo icon "cool" : raquette + balle (SVG) -->
+        <div class="logoWrap" aria-label="Logo Padel">
+          <svg class="logoIcon" viewBox="0 0 128 128" role="img" aria-hidden="true">
+            <defs>
+              <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0" stop-color="#2ecc71"/>
+                <stop offset="1" stop-color="#1fbf62"/>
+              </linearGradient>
+            </defs>
+
+            <!-- cercle -->
+            <circle cx="64" cy="64" r="56" fill="#151515" stroke="url(#g)" stroke-width="6"/>
+
+            <!-- raquette -->
+            <path d="M56 26c-15 0-27 12-27 27 0 15 12 27 27 27 15 0 27-12 27-27 0-15-12-27-27-27zm0 10c9.4 0 17 7.6 17 17s-7.6 17-17 17-17-7.6-17-17 7.6-17 17-17z"
+                  fill="url(#g)"/>
+            <!-- trous -->
+            <g fill="#0b0e14" opacity="0.85">
+              <circle cx="48" cy="46" r="3"/>
+              <circle cx="64" cy="46" r="3"/>
+              <circle cx="56" cy="56" r="3"/>
+              <circle cx="48" cy="66" r="3"/>
+              <circle cx="64" cy="66" r="3"/>
+            </g>
+
+            <!-- manche -->
+            <path d="M72 74l22 22c3 3 3 8 0 11s-8 3-11 0L61 85l11-11z" fill="#2b2b2b"/>
+            <path d="M72 74l7 7-11 11-7-7 11-11z" fill="#1c1c1c"/>
+
+            <!-- balle -->
+            <circle cx="90" cy="42" r="8" fill="url(#g)"/>
+            <path d="M86 38c3 2 5 6 5 10" fill="none" stroke="#0b0e14" stroke-width="2" stroke-linecap="round" opacity="0.7"/>
+          </svg>
+        </div>
+
+        <div class="homeLogo">PADEL</div>
+        <div class="homeSub">Score • Historique • Joueurs</div>
+
+        <div class="homeButtons">
+          <button class="homeBtn" onclick="goTo('score')">Nouveau match</button>
+          <button class="homeBtn" onclick="goTo('ranking')">Classement</button>
+          <button class="homeBtn" onclick="goTo('history')">Historique</button>
+          <button class="homeBtn" onclick="goTo('players')">Ajout joueur</button>
+        </div>
+
+        <div class="homeHint">
+          <span class="dot"></span>
+          <span>Fond anthracite • Boutons vert tennis</span>
+        </div>
+      </div>
+    </section>
+
     <!-- SCORE -->
-    <section id="view-score" class="view">
+    <section id="view-score" class="view hidden">
+      <div class="subbar">
+        <button class="backBtn" onclick="goTo('home')">← Accueil</button>
+        <div class="subbarTitle">Nouveau match</div>
+      </div>
+
       <h1>Compteur de match (2 vs 2)</h1>
 
       <div class="card">
@@ -44,7 +96,7 @@
             <div id="lockText" class="small muted">Lock: …</div>
           </div>
         </div>
-        <p class="muted">Mets <b>club1</b> si tu es seul. La montre doit utiliser le même Group ID.</p>
+        <p class="muted">La montre doit utiliser le même <b>Group ID</b> (ex: <b>club1</b>).</p>
       </div>
 
       <div class="card">
@@ -103,19 +155,20 @@
         </div>
 
         <div class="actionsRow">
-          <button id="btnStart" class="primary">Démarrer match (Cloud)</button>
-          <button id="btnStop" class="danger">Arrêter (effacer activeMatch)</button>
+          <button id="btnStart" class="primary">Démarrer match</button>
+          <button id="btnStop" class="danger">Arrêter</button>
         </div>
 
         <p id="hintStart" class="muted">Choisis 4 joueurs (2 par équipe).</p>
       </div>
 
       <div class="card">
-        <h2>Score (LIVE depuis Firestore)</h2>
+        <h2>Score (LIVE)</h2>
 
         <div class="scoreGrid">
           <div class="teamCard">
             <div class="teamName" id="teamAName">Équipe A</div>
+
             <div class="bigNums">
               <div>
                 <div class="small muted">sets</div>
@@ -137,6 +190,7 @@
 
           <div class="teamCard">
             <div class="teamName" id="teamBName">Équipe B</div>
+
             <div class="bigNums">
               <div>
                 <div class="small muted">sets</div>
@@ -158,20 +212,35 @@
         </div>
 
         <div class="actionsRow">
-          <button id="btnUndo" class="ghost">Annuler dernier point</button>
-          <button id="btnFinish" class="ghost">Terminer (DONE)</button>
-        </div>
-
-        <div class="actionsRow">
-          <button id="btnArchive" class="ghost">Archiver dans l’historique</button>
+          <button id="btnUndo" class="ghost">UNDO</button>
+          <button id="btnFinish" class="ghost">FIN</button>
+          <button id="btnArchive" class="ghost">Archiver</button>
         </div>
 
         <div id="watchInfo" class="okline muted">—</div>
       </div>
     </section>
 
+    <!-- RANKING (placeholder) -->
+    <section id="view-ranking" class="view hidden">
+      <div class="subbar">
+        <button class="backBtn" onclick="goTo('home')">← Accueil</button>
+        <div class="subbarTitle">Classement</div>
+      </div>
+      <h1>Classement</h1>
+      <div class="card">
+        <h2>Bientôt</h2>
+        <p class="muted">Le classement joueur sera ajouté ensuite (basé sur les matchs joués, pas les équipes).</p>
+      </div>
+    </section>
+
     <!-- PLAYERS -->
     <section id="view-players" class="view hidden">
+      <div class="subbar">
+        <button class="backBtn" onclick="goTo('home')">← Accueil</button>
+        <div class="subbarTitle">Ajout joueur</div>
+      </div>
+
       <h1>Joueurs</h1>
 
       <div class="card">
@@ -201,16 +270,20 @@
 
     <!-- HISTORY -->
     <section id="view-history" class="view hidden">
+      <div class="subbar">
+        <button class="backBtn" onclick="goTo('home')">← Accueil</button>
+        <div class="subbarTitle">Historique</div>
+      </div>
+
       <h1>Historique</h1>
       <div class="card">
         <h2>Matchs archivés</h2>
         <div id="historyList" class="list"></div>
       </div>
     </section>
+
   </main>
 
-  <footer class="footer muted">
-    PADEL • GitHub Pages • Firestore
-  </footer>
+  <footer class="footer muted">PADEL • GitHub Pages • Firestore</footer>
 </body>
 </html>
